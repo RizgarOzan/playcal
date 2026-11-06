@@ -19,6 +19,15 @@ Run `playcal <command> --json` and read the JSON. Exit code 0 means ok.
 - Does it still run: `playcal observe` (press Play, diff the scene, collect errors), `playcal visual check` for a screenshot diff.
 - Playtest data: `ingest` validates, `report` summarizes, `calibrate` predicts human pass rates from bot runs.
 
+## playcal audio
+
+check audio import settings (.meta / .import) against a folder policy, and WAV loudness (LUFS), true peak and clipping, offline.
+
+- `action`: check: import settings against the policy, WAV loudness and peaks
+- `paths`: clips to check (default: every audio file in the project)
+- `--project-path`: Unity or Godot project folder (default .)
+- `--policy`: JSON {"rules": [{"match": "*/UI/*", "load_type": [...], "mono": true, "max_true_peak": -1, "lufs": [lo, hi]}]}; default: UI and SFX in memory, Music streamed, peaks under -1 dBTP
+
 ## playcal baseline
 
 keep a perf baseline (p95 frame time, GC, memory) and fail only when a run is worse by more than noise.

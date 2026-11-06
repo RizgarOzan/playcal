@@ -232,6 +232,15 @@ One green run doesn't tell you a bug is gone; a flaky null ref passes one run in
 playcal playtest --engine godot --project-path . --expect "Player/hp=3" --events .playcal/bot.jsonl --level 4
 ```
 
+### `playcal audio check` (offline, Unity or Godot)
+
+A streamed UI click starts late and a 3-minute track set to Decompress On Load eats memory. `audio check` reads each clip's import settings (`.meta` in Unity, `.import` in Godot) and checks them against a folder policy, first matching rule wins. WAV files are also measured with the stdlib only: integrated loudness in LUFS (BS.1770), true peak in dBTP and clipped samples. Any problem is exit 1 with the file and the rule. The default policy keeps `*/UI/*` and `*/SFX/*` in memory (UI also mono), streams `*/Music/*` and wants peaks under -1 dBTP; `--policy FILE` replaces it and can add a `"lufs": [lo, hi]` band per rule.
+
+```
+playcal audio check --project-path .
+# Assets/UI/click.wav: load type Streaming, */UI/* wants DecompressOnLoad (short UI sounds should sit in memory; a streamed click starts late)
+```
+
 ### `playcal replay` (works on a live Editor)
 
 Record a session's input once, then play it back after every change and see whether the game still does the same thing. The game reads input through the SDK and marks what should come out the same:
