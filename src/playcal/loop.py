@@ -35,7 +35,7 @@ import sys
 import time
 from typing import Callable, Sequence
 
-from . import checks
+from . import checks, history
 from .registry import Module
 
 Runner = Callable[[list[str]], "tuple[int, dict]"]
@@ -369,7 +369,9 @@ def _run(args: argparse.Namespace) -> int:
             print(f"  fault: {out['fault']}")
         if out.get("undo"):
             print(f"  undo: {out['undo']}")
-    return EXIT.get(reason, 1)
+    code = EXIT.get(reason, 1)
+    history.record("loop", args.action, out, code, " ".join([args.name or "", *args.params]).strip())
+    return code
 
 
 MODULE = Module(name="loop", summary="run a Unity Editor command safely: wait until ready, run, wait again, one digest",

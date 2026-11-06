@@ -12,6 +12,7 @@ import sys
 import zlib
 from pathlib import Path
 
+from . import history
 from .registry import Module
 
 SIG = b"\x89PNG\r\n\x1a\n"
@@ -175,6 +176,8 @@ def _run(args: argparse.Namespace) -> int:
     else:
         print(f"{out['verdict']}: {out['changed_pixels']} pixels ({out['changed_percent']}%) differ"
               + (f", box {out['box']}, see {out['diff_png']}" if "diff_png" in out else ""))
+    if args.action != "save":
+        history.record("visual", args.action, out, code, args.name)
     return code
 
 

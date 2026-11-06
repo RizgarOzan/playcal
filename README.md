@@ -290,6 +290,17 @@ playcal visual check level4-start shot.png     # exit 1 if more than 0.1% of pix
 
 A pixel counts as changed when one of its channels moves by more than `--tolerance` (default 8 out of 255), so antialiasing and compression noise pass while a missing sprite doesn't. `--max-changed` sets how many percent of pixels may change. On a fail it writes a diff PNG with the changed pixels in red over a pale copy of the new shot, and the box tells an agent where to look. It reads 8- and 16-bit PNGs (grey, RGB, RGBA, no interlace) with the standard library only, and compares 16-bit shots at 8 bits (the high byte of each sample); a 1920x1080 shot takes about 2 s. Take shots at a fixed resolution, with animations paused, or the gate measures the animation. A part that changes on its own, like a clock or an FPS counter, can be skipped with `--ignore x0,y0,x1,y1` (repeat it for more boxes).
 
+### `playcal ui` (works today)
+
+Every `loop`, `observe`, `replay` and `visual check` run adds one line to `.playcal/history.jsonl`. `playcal ui` draws that file as one static HTML page, newest run first:
+
+```bash
+playcal ui --open            # writes .playcal/ui.html and opens it
+playcal ui --last 20         # only the newest 20 runs
+```
+
+Each row shows what ran, the verdict, compile and console errors as `file:line`, failed checks, the scene diff, the checkpoint to undo to, and the screenshot or visual diff image. The page has no server and no scripts. Set `PLAYCAL_HISTORY` to write the history somewhere else, or to `off` to write nothing.
+
 ### `playcal meta` (works today)
 
 An agent that moves `Player.cs` with `mv` leaves `Player.cs.meta` behind. Unity gives the script a new GUID on the next import and every scene that used it shows "Missing script". `meta` reads the project files, no Editor needed, and catches that before the import:

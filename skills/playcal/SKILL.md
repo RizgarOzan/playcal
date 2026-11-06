@@ -180,6 +180,15 @@ test result history: spot flaky tests, fail CI only on real failures, run only a
 - `--dir`: where the history lives (default .playcal/tests)
 - `--no-record`: check without adding this run to the history
 
+## playcal ui
+
+draw the run history (loop, observe, replay, visual) as one static HTML page, newest first.
+
+- `--history`: history file (default: $PLAYCAL_HISTORY or .playcal/history.jsonl)
+- `--out`: where to write the page (default .playcal/ui.html)
+- `--last`: only the newest N runs
+- `--open`: open the page in the default browser
+
 ## playcal visual
 
 screenshot gate: compare a PNG to a saved baseline with a per-pixel tolerance, write a diff PNG on a fail.

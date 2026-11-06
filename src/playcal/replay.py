@@ -24,7 +24,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from . import loop, observe
+from . import history, loop, observe
 from . import engines
 from .registry import Module
 
@@ -311,7 +311,9 @@ def _run(args: argparse.Namespace) -> int:
         print(json.dumps(out, ensure_ascii=False))
     else:
         _print(out)
-    return EXIT.get(out["reason"], loop.EXIT.get(out["reason"], 1))
+    code = EXIT.get(out["reason"], loop.EXIT.get(out["reason"], 1))
+    history.record("replay", args.action, out, code, " ".join(args.names or []))
+    return code
 
 
 MODULE = Module(name="replay", summary="record input through the SDK, replay it as a regression test with fixed frame rate and seed, step frames",

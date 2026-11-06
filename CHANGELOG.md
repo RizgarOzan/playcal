@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `playcal ui`: loop, observe, replay and visual check now append to `.playcal/history.jsonl`, and `playcal ui` draws it as one static HTML page with errors as file:line, checkpoints and diff images. `PLAYCAL_HISTORY=off` turns the history off.
 - Claude Code plugin and marketplace manifest, so `/plugin install playcal@playcal` adds the skill and the MCP server. The skill also installs with `npx skills add RizgarOzan/playcal`.
 - Unity commands moved behind an engine adapter (`playcal/engines/`), the first step toward Godot and Unreal. No behaviour change.
 - `playcal meta`: an offline check for .meta and GUID damage (copied or left-behind .meta files, missing scripts, class names that don't match the file) before Unity imports it.

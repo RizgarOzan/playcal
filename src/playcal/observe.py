@@ -25,7 +25,7 @@ import shlex
 import time
 from typing import Callable, Sequence
 
-from . import checks, logs, loop, snap
+from . import checks, history, logs, loop, snap
 from . import engines
 from .registry import Module
 
@@ -202,7 +202,9 @@ def _run(args: argparse.Namespace) -> int:
             print(f"  shot: {out['shot']}")
         if "hint" in out.get("before", {}):
             print(f"  {out['before']['hint']}")
-    return EXIT.get(out["reason"], loop.EXIT.get(out["reason"], 1))
+    code = EXIT.get(out["reason"], loop.EXIT.get(out["reason"], 1))
+    history.record("observe", "run", out, code, args.name or "")
+    return code
 
 
 MODULE = Module(name="observe", summary="press Play, run the game a few seconds, diff the scene and collect console errors; screenshot only on red",
