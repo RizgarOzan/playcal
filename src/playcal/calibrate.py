@@ -17,7 +17,7 @@ from pathlib import Path
 
 from .ingest import check_lines
 from .registry import Module
-from .report import _level_sort_key, summarize
+from .report import _level_sort_key, check_targets, load_targets, summarize
 
 # two-sided 95% t quantiles; above 30 df the normal value is close enough
 T975 = [12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 2.201, 2.179, 2.160, 2.145, 2.131,
@@ -135,6 +135,7 @@ def _add_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--human", nargs="+", required=True, help="event JSONL from the human panel (accepted.jsonl from ingest)")
     p.add_argument("--bot", nargs="+", required=True, help="event JSONL from bot runs, same schema")
     p.add_argument("--min-attempts", type=int, default=5, help="human attempts a level needs to count for calibration (default 5)")
+    p.add_argument("--targets", metavar="FILE", help='JSON {"4": [40, 60]}: predicted human pass-rate band per level; a level outside its band exits 1')
     p.add_argument("--json", action="store_true", help="print JSON instead of a table")
 
 
@@ -145,12 +146,17 @@ def _pct(x: float) -> str:
 def _run(args: argparse.Namespace) -> int:
     try:
         out = calibrate(_stats(args.human), _stats(args.bot), args.min_attempts)
-    except (OSError, ValueError) as e:
+        targets = load_targets(args.targets) if getattr(args, "targets", None) else {}
+    except (OSError, ValueError, TypeError) as e:
         print(json.dumps({"error": str(e)}) if args.json else f"playcal calibrate: {e}", file=None if args.json else sys.stderr)
         return 2
+    misses = check_targets(((r["game_version"], r["level"], r["predicted"]) for r in out["levels"]), targets, "predicted")
+    code = 1 if misses else 0
+    if targets:
+        out["targets_missed"] = misses
     if args.json:
         print(json.dumps(out, ensure_ascii=False))
-        return 0
+        return code
     m, loo = out["model"], out["leave_one_out"]
     print(f"{'version':<10} {'level':<8} {'bot':>5} {'predicted human':>20} {'human seen':>12}")
     for r in out["levels"]:
@@ -164,7 +170,9 @@ def _run(args: argparse.Namespace) -> int:
               f"median error {100 * loo['median_abs_error']:.0f} points.")
     else:
         print("leave-one-out needs at least 4 calibration levels; treat these numbers as a rough guess.")
-    return 0
+    for miss in misses:
+        print(miss["message"])
+    return code
 
 
 MODULE = Module(name="calibrate", summary="predict each level's human pass rate from bot runs, calibrated on a small human panel, with 95% intervals",

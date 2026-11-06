@@ -48,6 +48,7 @@ predict each level's human pass rate from bot runs, calibrated on a small human 
 - `--human`: event JSONL from the human panel (accepted.jsonl from ingest)
 - `--bot`: event JSONL from bot runs, same schema
 - `--min-attempts`: human attempts a level needs to count for calibration (default 5)
+- `--targets`: JSON {"4": [40, 60]}: predicted human pass-rate band per level; a level outside its band exits 1
 
 ## playcal checkpoint
 
@@ -191,6 +192,7 @@ record input through the SDK, replay it as a regression test with fixed frame ra
 per-level pass rate, attempts and quit rate with 95% Wilson intervals.
 
 - `files`: event JSONL files (usually accepted.jsonl from ingest)
+- `--targets`: JSON {"4": [40, 60]}: attempt pass-rate band per level; a level outside its band exits 1
 
 ## playcal snap
 

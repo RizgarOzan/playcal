@@ -131,6 +131,8 @@ playcal calibrate --human panel.jsonl --bot bots.jsonl
 
 Both files use the same event schema. It fits human logits to bot logits per level with a random-effects regression, so levels that the bots get wrong in their own way make every interval wider instead of quietly pulling the line. You need humans on at least 3 levels (5+ attempts each, `--min-attempts`). From 4 levels on it also leaves each one out in turn and checks whether its real rate lands in the predicted interval; that line tells you how far to trust the rest. With a handful of levels the intervals are wide, and that's the honest answer.
 
+Give it the difficulty you designed for and it becomes a gate. `--targets targets.json` holds a pass-rate band per level, like `{"4": [40, 60]}`. Any level whose predicted rate falls outside its band prints `level 4: predicted 25%, target 40%-60%` and the command exits 1, so CI can stop a build that made a level too hard. `playcal report --targets` does the same with the measured attempt pass rate.
+
 ### `playcal logs` (works today)
 
 Boils a Unity `Editor.log` (or Player.log, or pasted console text) down to what an agent needs. The same error a thousand times becomes one entry with `count: 1000`, and the first cause is pulled out on its own, since later errors are usually fallout.

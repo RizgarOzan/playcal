@@ -121,3 +121,20 @@ def test_cli_says_when_every_event_is_rejected(tmp_path, capsys):
     b = write(tmp_path / "bot.jsonl", events("01", 20, 10))
     assert main(["calibrate", "--human", write(tmp_path / "h.jsonl", bad), "--bot", b, "--json"]) == 2
     assert "rejected" in json.loads(capsys.readouterr().out)["error"]
+
+
+def test_targets_exit_1_with_the_level(tmp_path, capsys):
+    b = write(tmp_path / "bot.jsonl", events("01", 40, 36) + events("02", 40, 24, 40) + events("03", 40, 12, 80)
+              + events("04", 40, 4, 120))
+    h = write(tmp_path / "human.jsonl", events("01", 20, 16) + events("02", 20, 10, 20) + events("03", 20, 4, 40)
+              + events("04", 20, 1, 60))
+    t = tmp_path / "targets.json"
+    t.write_text(json.dumps({"01": [40, 95], "04": [40, 60]}), encoding="utf-8")
+    assert main(["calibrate", "--human", h, "--bot", b, "--targets", str(t)]) == 1
+    text = capsys.readouterr().out
+    assert "level 04: predicted " in text and "target 40%-60%" in text and "level 01:" not in text
+    assert main(["report", h, "--targets", str(t), "--json"]) == 1
+    miss = json.loads(capsys.readouterr().out)["targets_missed"]
+    assert [m["level"] for m in miss] == ["04"] and miss[0]["pass rate"] == 0.05
+    t.write_text(json.dumps({"04": [0, 0.6]}), encoding="utf-8")
+    assert main(["report", h, "--targets", str(t)]) == 0

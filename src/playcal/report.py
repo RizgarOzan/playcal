@@ -101,8 +101,31 @@ def _pct(x: float) -> str:
     return f"{100 * x:.0f}%"
 
 
+def load_targets(path: str) -> dict[str, tuple[float, float]]:
+    """{"4": [40, 60], ...}: a pass-rate band per level, in percent (or 0..1)."""
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    out = {}
+    for level, band in raw.items():
+        lo, hi = (float(v) for v in band)
+        scale = 100 if max(lo, hi) > 1 else 1
+        out[str(level)] = (lo / scale, hi / scale)
+    return out
+
+
+def check_targets(rows: Iterable[tuple[str, str, float]], targets: dict, what: str) -> list[dict]:
+    """(game_version, level, rate) rows against the bands: one miss per level outside its band."""
+    misses = []
+    for version, level, rate in rows:
+        band = targets.get(level)
+        if band and not band[0] <= rate <= band[1]:
+            misses.append({"game_version": version, "level": level, what: round(rate, 4), "target": list(band),
+                           "message": f"level {level}: {what} {_pct(rate)}, target {_pct(band[0])}-{_pct(band[1])}"})
+    return misses
+
+
 def _add_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("files", nargs="+", help="event JSONL files (usually accepted.jsonl from ingest)")
+    p.add_argument("--targets", metavar="FILE", help='JSON {"4": [40, 60]}: attempt pass-rate band per level; a level outside its band exits 1')
     p.add_argument("--json", action="store_true", help="print JSON instead of a table")
 
 
@@ -114,9 +137,19 @@ def _run(args: argparse.Namespace) -> int:
         return 2
     res = check_lines(lines)
     stats = summarize(res.accepted)
+    try:
+        targets = load_targets(args.targets) if getattr(args, "targets", None) else {}
+    except (OSError, ValueError, TypeError) as e:
+        print(f"playcal report: --targets: {e}", file=sys.stderr)
+        return 2
+    misses = check_targets(((s.game_version, s.level, s.attempt_pass_rate) for s in stats), targets, "pass rate")
+    code = 1 if misses else 0
     if args.json:
-        print(json.dumps({"skipped_invalid": len(res.rejected), "levels": [asdict(s) for s in stats]}, ensure_ascii=False))
-        return 0
+        out = {"skipped_invalid": len(res.rejected), "levels": [asdict(s) for s in stats]}
+        if targets:
+            out["targets_missed"] = misses
+        print(json.dumps(out, ensure_ascii=False))
+        return code
     if res.rejected:
         print(f"skipped {len(res.rejected)} invalid line(s); run `playcal ingest` to see why", file=sys.stderr)
     if not stats:
@@ -129,7 +162,9 @@ def _run(args: argparse.Namespace) -> int:
         med = "-" if s.median_attempts_to_pass is None else f"{s.median_attempts_to_pass:g}"
         print(f"{s.game_version:<10} {s.level:<8} {s.players:>7} {pl:>22} {at:>22} {_pct(s.quit_rate):>5} {med:>7}")
     print("brackets = 95% Wilson interval. With under ~10 players these are wide; read them, don't round them away.")
-    return 0
+    for m in misses:
+        print(m["message"])
+    return code
 
 
 MODULE = Module(name="report", summary="per-level pass rate, attempts and quit rate with 95% Wilson intervals",
