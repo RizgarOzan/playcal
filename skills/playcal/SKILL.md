@@ -124,6 +124,30 @@ press Play, run the game a few seconds, diff the scene and collect console error
 - `--limit`: most diff entries to list (default 50)
 - `--project-path`: Unity project folder (needed when several Editors are open), or the Godot project folder
 - `--timeout`: seconds to wait for a ready Editor (default 120)
+- `--repeat`: run N times; some red and some green is inconclusive (exit 7), see playcal playtest
+
+## playcal playtest
+
+run observe N times: a checklist of pass/fail/skip per run, red vs flaky (inconclusive), runs saved as PC0 events for calibrate.
+
+- `--engine`: unity talks to the open Editor; godot runs the main scene headless (default unity)
+- `--scene`: godot only: scene to run instead of the main scene (res://...)
+- `--read`: Editor read to diff before and during play (default "scene get_hierarchy")
+- `--seconds`: how long to let the game run before the second read (default 3)
+- `--no-play`: don't touch Play Mode; diff two reads --seconds apart
+- `--expect`: check on the read during play, same syntax as playcal loop --expect. Repeatable
+- `--shots`: where the red-run screenshot goes, relative to the Unity project (default .playcal/observe)
+- `--name`: screenshot file name without .png (default observe)
+- `--no-shot`: never take a screenshot
+- `--ignore`: field to leave out of the diff, repeatable (default: instanceId, isDirty)
+- `--limit`: most diff entries to list (default 50)
+- `--project-path`: Unity project folder (needed when several Editors are open), or the Godot project folder
+- `--timeout`: seconds to wait for a ready Editor (default 120)
+- `--repeat`: run N times; some red and some green is inconclusive (exit 7), see playcal playtest
+- `--events`: write the runs as PC0 events (JSONL) for report and calibrate
+- `--level`: level name in the events (default playtest)
+- `--game`: game name in the events (default game)
+- `--game-version`: game_version in the events (default dev)
 
 ## playcal query
 

@@ -222,6 +222,14 @@ Exit 0 is clean, 1 is red (console errors, a failed check, a read that failed, P
 
 On a live Editor (Unity 6000.3, Pipeline 0.10.0-exp.1) a clean `observe --seconds 3` takes about 33 s. The reload isn't what costs: `editor.playmode start` only comes back once it's done. What costs is the CLI itself, 3–5 s for every `unity` call, whatever it does. So observe makes 7 calls where it used to make 16: the reads before and after Play go through one `job batch` call each, and it asks `editor status`, which says "playing" right away, instead of polling `unity status`, which can list no Editor for several seconds after that. The first version took about 70 s and let the game run ~26 s when asked for 3. Then I added a script that spawns from a missing prefab: observe reported the `ArgumentException` with its file and line, `1 added` in the scene, and saved a real Game view screenshot, in 45 s. Not seen live yet: a project with "Enter Play Mode Options" set to skip the reload, and a console that overflows during the run (the digest says `dropped` when it does).
 
+### `playcal playtest` (works on a live Editor or Godot)
+
+One green run doesn't tell you a bug is gone; a flaky null ref passes one run in three. `playtest` runs observe several times (default 3) and prints a checklist: each `--expect` row and "no console errors", with pass, fail and skip counts. Every run red is `red` (exit 1), some red is `inconclusive` (exit 7), all green is `clean`. Runs that broke for infra reasons (no Editor) count as skip. `--events bot.jsonl --level 4` writes each run as one PC0 attempt, so `playcal calibrate --bot bot.jsonl` and `playcal report` read it. `playcal observe --repeat N` does the same thing.
+
+```bash
+playcal playtest --engine godot --project-path . --expect "Player/hp=3" --events .playcal/bot.jsonl --level 4
+```
+
 ### `playcal replay` (works on a live Editor)
 
 Record a session's input once, then play it back after every change and see whether the game still does the same thing. The game reads input through the SDK and marks what should come out the same:

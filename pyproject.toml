@@ -48,6 +48,7 @@ doctor = "playcal.doctor:MODULE"
 visual = "playcal.visual:MODULE"
 calibrate = "playcal.calibrate:MODULE"
 observe = "playcal.observe:MODULE"
+playtest = "playcal.playtest:MODULE"
 replay = "playcal.replay:MODULE"
 ui = "playcal.ui:MODULE"
 

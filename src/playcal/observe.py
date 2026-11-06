@@ -174,6 +174,8 @@ def _add_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--project-path", help="Unity project folder (needed when several Editors are open), or the Godot project folder")
     p.add_argument("--timeout", type=float, default=120, help="seconds to wait for a ready Editor (default 120)")
     p.add_argument("--json", action="store_true", help="print the digest as JSON")
+    p.add_argument("--repeat", type=int, default=1, metavar="N",
+                   help="run N times; some red and some green is inconclusive (exit 7), see playcal playtest")
 
 
 def observe_godot(godot, project: str | None = None, seconds: float = 3, expect: Sequence[str] = (),
@@ -198,14 +200,20 @@ def observe_godot(godot, project: str | None = None, seconds: float = 3, expect:
     return d
 
 
-def _run(args: argparse.Namespace) -> int:
+def run_once(args: argparse.Namespace) -> dict:
     ignore = snap.VOLATILE if args.ignore is None else [k for k in args.ignore if k]
     if args.engine == "godot":
-        out = observe_godot(engines.get("godot"), args.project_path, args.seconds, args.expect, args.scene,
-                            args.timeout, ignore, args.limit)
-    else:
-        out = observe(loop.unity_runner, args.project_path, shlex.split(args.read), args.seconds, not args.no_play,
-                      args.expect, None if args.no_shot else args.shots, args.name, args.timeout, ignore, args.limit)
+        return observe_godot(engines.get("godot"), args.project_path, args.seconds, args.expect, args.scene,
+                             args.timeout, ignore, args.limit)
+    return observe(loop.unity_runner, args.project_path, shlex.split(args.read), args.seconds, not args.no_play,
+                   args.expect, None if args.no_shot else args.shots, args.name, args.timeout, ignore, args.limit)
+
+
+def _run(args: argparse.Namespace) -> int:
+    if getattr(args, "repeat", 1) > 1:
+        from . import playtest
+        return playtest._run(args)
+    out = run_once(args)
     if args.json:
         print(json.dumps(out, ensure_ascii=False))
     else:
