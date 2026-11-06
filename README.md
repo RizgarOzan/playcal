@@ -243,6 +243,15 @@ playcal audio check --project-path .
 # Assets/UI/click.wav: load type Streaming, */UI/* wants DecompressOnLoad (short UI sounds should sit in memory; a streamed click starts late)
 ```
 
+### `playcal assets check` (offline, Unity or Godot)
+
+The texture side of the same idea. It reads each image's import settings (`.meta` or `.import`) and its real size from the PNG or JPEG header, then checks them against a folder policy with the same shape as `audio check`: texture type, mipmaps, Read/Write, compression and max size. It reads the default platform settings, not per-platform overrides. The default policy wants `*/UI/*` as sprites without mipmaps, and everything else compressed, not readable and capped at 4096.
+
+```
+playcal assets check --project-path .
+# Assets/UI/button.png: mipmaps on, */UI/* wants mipmaps off (UI draws at screen size; mipmaps add a third more memory and blur it)
+```
+
 ### `playcal replay` (works on a live Editor)
 
 Record a session's input once, then play it back after every change and see whether the game still does the same thing. The game reads input through the SDK and marks what should come out the same:
@@ -398,6 +407,7 @@ For the visual gate, `PlaycalShots.Capture("level4-start")` saves a screenshot t
 | `lock` | scene/asset locks for several agents at once | ✅ works (advisory lock files with expiry) |
 | `meta` | .meta/GUID damage from files moved outside the Editor | ✅ works (offline, reads files only) |
 | `doctor` | check the setup before a run | ✅ works |
+| `assets` | texture import settings against a folder policy | ✅ works (offline, Unity `.meta` and Godot `.import`) |
 | `audio` | audio import settings against a folder policy, WAV loudness and peaks | ✅ works (offline, Unity `.meta` and Godot `.import`) |
 | Godot | same core, new backend | ✅ `loop settle`, `observe`, `snap`, checked on Godot 4.7.2 |
 | Unreal | same core, through Epic's editor MCP server (127.0.0.1:8000/mcp) | postponed: I don't have an Unreal install to check it against, and I won't ship an adapter I haven't run. A PR from someone who has one is welcome |

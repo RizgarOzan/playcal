@@ -50,6 +50,7 @@ calibrate = "playcal.calibrate:MODULE"
 observe = "playcal.observe:MODULE"
 playtest = "playcal.playtest:MODULE"
 audio = "playcal.audio:MODULE"
+assets = "playcal.assets:MODULE"
 replay = "playcal.replay:MODULE"
 ui = "playcal.ui:MODULE"
 

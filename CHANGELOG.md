@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `playcal assets check`: texture import settings (type, mipmaps, Read/Write, compression, max size) against a folder policy, plus the real image size, offline.
 - `calibrate --targets` and `report --targets`: a pass-rate band per level; a level outside its band is named and the command exits 1.
 - README: the Unreal adapter is postponed until it can be run against a real Unreal Editor.
 - `playcal audio check`: audio import settings (`.meta` / Godot `.import`) against a folder policy, plus WAV loudness (LUFS), true peak and clipping, offline with the stdlib.

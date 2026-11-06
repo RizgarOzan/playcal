@@ -19,6 +19,15 @@ Run `playcal <command> --json` and read the JSON. Exit code 0 means ok.
 - Does it still run: `playcal observe` (press Play, diff the scene, collect errors), `playcal visual check` for a screenshot diff.
 - Playtest data: `ingest` validates, `report` summarizes, `calibrate` predicts human pass rates from bot runs.
 
+## playcal assets
+
+check texture import settings (.meta / .import) against a folder policy: type, mipmaps, Read/Write, compression, max size, offline.
+
+- `action`: check: texture import settings against the policy
+- `paths`: images to check (default: every image in the project)
+- `--project-path`: Unity or Godot project folder (default .)
+- `--policy`: JSON {"rules": [{"match": "*/UI/*", "texture_type": ["Sprite"], "mipmaps": false, "readable": false, "compressed": true, "max_size": 2048}]}; default: UI as sprites without mipmaps, everything compressed, not readable, at most 4096
+
 ## playcal audio
 
 check audio import settings (.meta / .import) against a folder policy, and WAV loudness (LUFS), true peak and clipping, offline.
