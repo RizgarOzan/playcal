@@ -1,0 +1,11 @@
+{
+  "name": "playcal",
+  "owner": {"name": "Rizgar Ozan"},
+  "plugins": [
+    {
+      "name": "playcal",
+      "source": "./",
+      "description": "Game-dev toolkit for agents: safe Unity Editor commands, playtest reports, log summaries."
+    }
+  ]
+}

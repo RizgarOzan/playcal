@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Claude Code plugin and marketplace manifest, so `/plugin install playcal@playcal` adds the skill and the MCP server. The skill also installs with `npx skills add RizgarOzan/playcal`.
+- Unity commands moved behind an engine adapter (`playcal/engines/`), the first step toward Godot and Unreal. No behaviour change.
+
 ## 0.1.3 (2026-11-06)
 
 - `playcal skill` now opens with a short "which command when" section, so an agent reading the SKILL.md knows the order: doctor, loop for every write, logs for the first cause. The MCP server sends the same lines as `instructions` on initialize.

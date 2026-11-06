@@ -77,3 +77,12 @@ def test_skill_md_lists_every_module():
         assert f"## playcal {name}" in md
     assert "`--verify`" in md
     assert "## Which command when" in md and md.index("## Which command when") < md.index("## playcal ")
+
+
+def test_shipped_skill_and_plugin_match_the_code():
+    """skills/playcal/SKILL.md is what `npx skills add` and the Claude plugin install; regenerate with
+    `playcal skill > skills/playcal/SKILL.md` after changing a module or GUIDE."""
+    from playcal import __version__
+    root = Path(__file__).resolve().parents[1]
+    assert (root / "skills/playcal/SKILL.md").read_text(encoding="utf-8").replace("\r\n", "\n") == surfaces.skill_md() + "\n"
+    assert json.loads((root / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))["version"] == __version__

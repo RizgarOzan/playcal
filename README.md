@@ -74,6 +74,19 @@ If your agent has a shell, a skill file is cheaper than MCP (no tool list in eve
 mkdir -p .claude/skills/playcal && playcal skill > .claude/skills/playcal/SKILL.md
 ```
 
+Or get both at once. In Claude Code, the plugin adds the skill and the MCP server (it starts the server with `pipx run playcal mcp`):
+
+```text
+/plugin marketplace add RizgarOzan/playcal
+/plugin install playcal@playcal
+```
+
+For other agents, [skills.sh](https://skills.sh) installs the same skill file:
+
+```bash
+npx skills add RizgarOzan/playcal
+```
+
 ## Usage
 
 Every command can print `--json`, so agents can read the result without scraping text.
