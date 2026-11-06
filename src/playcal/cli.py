@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from . import __version__, surfaces
 from .registry import load_modules
@@ -19,8 +20,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("mcp", help="serve every module as an MCP tool over stdio").set_defaults(
         func=lambda a: surfaces.serve())
-    sub.add_parser("skill", help="print a SKILL.md for coding agents, built from the installed modules").set_defaults(
-        func=lambda a: print(surfaces.skill_md()) or 0)
+    sk = sub.add_parser("skill", help="print a SKILL.md for coding agents, built from the installed modules")
+    sk.add_argument("--project", metavar="DIR", help="write .claude/skills/playcal/SKILL.md into this game project, "
+                    "with its engine and red gate first")
+    sk.add_argument("--engine", choices=sorted(surfaces.PROJECT_GUIDE), help="with --project: skip engine detection")
+    sk.set_defaults(func=_skill)
 
     for mod in load_modules():
         text = mod.summary.replace("%", "%%")  # argparse treats % as a format code
@@ -28,6 +32,22 @@ def build_parser() -> argparse.ArgumentParser:
         mod.add_args(sp)
         sp.set_defaults(func=mod.run)
     return p
+
+
+def _skill(args: argparse.Namespace) -> int:
+    if not args.project:
+        print(surfaces.skill_md())
+        return 0
+    engine = args.engine or surfaces.detect_engine(args.project)
+    if not engine:
+        print(f"playcal skill: no Unity (Assets/ + ProjectSettings/) or Godot (project.godot) project in {args.project}; "
+              "pass --engine", file=sys.stderr)
+        return 2
+    out = Path(args.project) / ".claude" / "skills" / "playcal" / "SKILL.md"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(surfaces.skill_md(engine), encoding="utf-8")
+    print(f"wrote {out} ({engine})")
+    return 0
 
 
 def _list_modules(args: argparse.Namespace) -> int:

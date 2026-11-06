@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `playcal skill --project DIR` writes a project SKILL.md with the engine (Unity or Godot, detected) and its red gate at the top.
 - `playcal playtest` and `observe --repeat N`: run observe several times, print a pass/fail/skip checklist, and call a sometimes-red result `inconclusive` (exit 7). `--events` writes the runs as PC0 events that `calibrate` and `report` read.
 - Godot adapter: `loop settle --engine godot`, `observe --engine godot` and `snap --godot` run Godot headless with a probe script and report parse errors and `push_error` as file:line. Set `PLAYCAL_GODOT` when `godot` is not on PATH.
 - `playcal ui`: loop, observe, replay and visual check now append to `.playcal/history.jsonl`, and `playcal ui` draws it as one static HTML page with errors as file:line, checkpoints and diff images. `PLAYCAL_HISTORY=off` turns the history off.

@@ -87,6 +87,8 @@ For other agents, [skills.sh](https://skills.sh) installs the same skill file:
 npx skills add RizgarOzan/playcal
 ```
 
+`playcal skill --project .` writes `.claude/skills/playcal/SKILL.md` into a game project. It spots the engine (Unity: `Assets/` + `ProjectSettings/`, Godot: `project.godot`) and puts the red gate first: the settle and observe commands that must pass before a change counts as done. In a test, a fresh Claude Code session given only "add a print to main.gd" in the Godot sample loaded the skill and ran `loop settle --engine godot` without being asked (it checked the print with plain Godot instead of `observe`).
+
 ## Usage
 
 Every command can print `--json`, so agents can read the result without scraping text.

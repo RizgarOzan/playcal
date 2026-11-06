@@ -9,6 +9,7 @@ import argparse
 import contextlib
 import io
 import json
+from pathlib import Path
 import sys
 
 from . import __version__
@@ -156,13 +157,39 @@ GUIDE = [  # one line per situation: shown at the top of SKILL.md and sent as MC
 ]
 
 
-def skill_md() -> str:
-    lines = ["---", "name: playcal",
-             "description: Game-dev toolkit for agents. Use to read playtest results, summarize Unity logs, "
-             "and run Unity Editor commands safely (wait until ready, run, verify). Every command takes --json.",
+# what `playcal skill --project` puts first for each engine: the check to pass before calling a change done
+PROJECT_GUIDE = {
+    "unity": ["- This is a Unity project. Start with `playcal doctor`; do it before the first Editor command.",
+              "- Red gate: after any change, `playcal loop settle --compile` must exit 0 and `playcal observe` must say clean "
+              "before you report the change as done."],
+    "godot": ["- This is a Godot project. playcal runs Godot headless; set PLAYCAL_GODOT if `godot` is not on PATH.",
+              "- Red gate: after any change, `playcal loop settle --engine godot` must exit 0 (no parse errors) and "
+              "`playcal observe --engine godot` must say clean before you report the change as done.",
+              "- Flaky bug: `playcal playtest --engine godot` runs it three times; inconclusive (exit 7) means not fixed."],
+}
+
+
+def detect_engine(project: str | Path) -> str | None:
+    d = Path(project)
+    if (d / "project.godot").exists():
+        return "godot"
+    if (d / "Assets").is_dir() and (d / "ProjectSettings").is_dir():
+        return "unity"
+    return None
+
+
+def skill_md(engine: str | None = None) -> str:
+    desc = ("Game-dev toolkit for agents. Use to read playtest results, summarize Unity logs, "
+            "and run Unity Editor commands safely (wait until ready, run, verify). Every command takes --json.")
+    first: list[str] = []
+    if engine:
+        desc = (f"Use before and after every change in this {engine.capitalize()} project. playcal checks that it "
+                f"compiles and runs clean (the red gate) before a change is called done. Every command takes --json.")
+        first = ["## This project", "", *PROJECT_GUIDE[engine], ""]
+    lines = ["---", "name: playcal", f"description: {desc}",
              "---", "", "# playcal", "",
              "Run `playcal <command> --json` and read the JSON. Exit code 0 means ok.", "",
-             "## Which command when", "", *GUIDE, ""]
+             *first, "## Which command when", "", *GUIDE, ""]
     for mod in load_modules():
         lines += [f"## playcal {mod.name}", "", mod.summary + ".", ""]
         for a in _actions(mod):
