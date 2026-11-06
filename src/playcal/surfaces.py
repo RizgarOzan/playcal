@@ -149,6 +149,7 @@ GUIDE = [  # one line per situation: shown at the top of SKILL.md and sent as MC
     "- Scripts changed: `playcal loop run ... --compile`, then `playcal logs --since \"Reloading assemblies\"` for the first cause.",
     "- Something is red in the console: `playcal logs` first, it collapses repeats and names the first cause.",
     "- Big command output: `playcal query` to keep only the fields you need instead of reading the whole hierarchy.",
+    "- Moved, renamed, copied or deleted files under Assets/ outside the Editor: `playcal meta` before Unity imports them.",
     "- Before a risky step: `playcal checkpoint save`; `playcal loop run --checkpoint` does it for you.",
     "- Does it still run: `playcal observe` (press Play, diff the scene, collect errors), `playcal visual check` for a screenshot diff.",
     "- Playtest data: `ingest` validates, `report` summarizes, `calibrate` predicts human pass rates from bot runs.",

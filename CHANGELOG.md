@@ -4,6 +4,7 @@
 
 - Claude Code plugin and marketplace manifest, so `/plugin install playcal@playcal` adds the skill and the MCP server. The skill also installs with `npx skills add RizgarOzan/playcal`.
 - Unity commands moved behind an engine adapter (`playcal/engines/`), the first step toward Godot and Unreal. No behaviour change.
+- `playcal meta`: an offline check for .meta and GUID damage (copied or left-behind .meta files, missing scripts, class names that don't match the file) before Unity imports it.
 
 ## 0.1.3 (2026-11-06)
 

@@ -14,7 +14,7 @@ Unity first, built on top of Unity's official CLI. Godot and Unreal plug into th
 
 *AI agents: read [llms.txt](llms.txt) first.*
 
-> **Status: pre-alpha (v0.1.0).** Today the event schema, `ingest`, `report`, `calibrate`, `logs`, `loop`, `query`, `snap`, `observe`, `replay`, `baseline` (perf and memory), `visual`, `tests`, `affected`, `lock`, `checkpoint`, `doctor`, the MCP server and the Unity SDK work; `loop`, `query`, `snap`, `observe`, `replay` and the SDK frame recorder were checked on a live Unity 6000.3 Editor. Everything below marked *planned* isn't built yet. I'd rather show a short honest list than a long fake one. Progress is tracked in the [roadmap](#roadmap).
+> **Status: pre-alpha (v0.1.0).** Today the event schema, `ingest`, `report`, `calibrate`, `logs`, `loop`, `query`, `snap`, `observe`, `replay`, `baseline` (perf and memory), `visual`, `tests`, `affected`, `lock`, `meta`, `checkpoint`, `doctor`, the MCP server and the Unity SDK work; `loop`, `query`, `snap`, `observe`, `replay` and the SDK frame recorder were checked on a live Unity 6000.3 Editor. Everything below marked *planned* isn't built yet. I'd rather show a short honest list than a long fake one. Progress is tracked in the [roadmap](#roadmap).
 
 ![A script spawns coins from a null prefab: playcal observe runs the game, reports the exception with file and line and exits 1; after the fix it exits 0](docs/demo.gif)
 
@@ -290,6 +290,16 @@ playcal visual check level4-start shot.png     # exit 1 if more than 0.1% of pix
 
 A pixel counts as changed when one of its channels moves by more than `--tolerance` (default 8 out of 255), so antialiasing and compression noise pass while a missing sprite doesn't. `--max-changed` sets how many percent of pixels may change. On a fail it writes a diff PNG with the changed pixels in red over a pale copy of the new shot, and the box tells an agent where to look. It reads 8- and 16-bit PNGs (grey, RGB, RGBA, no interlace) with the standard library only, and compares 16-bit shots at 8 bits (the high byte of each sample); a 1920x1080 shot takes about 2 s. Take shots at a fixed resolution, with animations paused, or the gate measures the animation. A part that changes on its own, like a clock or an FPS counter, can be skipped with `--ignore x0,y0,x1,y1` (repeat it for more boxes).
 
+### `playcal meta` (works today)
+
+An agent that moves `Player.cs` with `mv` leaves `Player.cs.meta` behind. Unity gives the script a new GUID on the next import and every scene that used it shows "Missing script". `meta` reads the project files, no Editor needed, and catches that before the import:
+
+```bash
+playcal meta --project .     # exit 1 on errors; --json for the full list
+```
+
+Errors are things that will break: two `.meta` files with one GUID, an asset moved without its `.meta`, a `.meta` with no GUID, and a scene or prefab pointing at a script GUID nothing has. Warnings are new files without a `.meta` yet, leftover `.meta` files, case mismatches, and MonoBehaviour classes whose name isn't the file name. Script GUIDs from packages are read from `Library/PackageCache`; on a fresh clone without it, missing scripts are only warnings.
+
 ### `playcal lock` (works today)
 
 When two agents, or an agent and a person, work on one project, they shouldn't both edit `Level4.unity`. `lock` takes a lock file under `.playcal/locks/`:
@@ -342,6 +352,7 @@ For the visual gate, `PlaycalShots.Capture("level4-start")` saves a screenshot t
 | `replay` | frame stepping, recorded input, replay → regression test | ✅ works, checked on a live Unity 6000.3 Editor (record, match, divergence, stop and step); not yet with a person playing or across restarts |
 | `tests` | flaky history and quarantine, affected tests | ✅ history, flaky detection, quarantine (NUnit3, JUnit) and affected test assemblies from the .asmdef graph |
 | `lock` | scene/asset locks for several agents at once | ✅ works (advisory lock files with expiry) |
+| `meta` | .meta/GUID damage from files moved outside the Editor | ✅ works (offline, reads files only) |
 | `doctor` | check the setup before a run | ✅ works |
 | Godot, Unreal | same core, new backend | later |
 

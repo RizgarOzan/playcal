@@ -1,6 +1,6 @@
 # playcal
 
-> Open-source toolkit for AI agents working on games (Unity first). Python CLI, every command supports --json. Pre-alpha: `ingest`, `report`, `calibrate`, `logs`, `query`, `snap`, `observe`, `replay`, `baseline`, `visual`, `tests`, `affected`, `lock`, `checkpoint`, `doctor`, `mcp`, `skill` and the Unity SDK work today; `loop` is early.
+> Open-source toolkit for AI agents working on games (Unity first). Python CLI, every command supports --json. Pre-alpha: `ingest`, `report`, `calibrate`, `logs`, `query`, `snap`, `observe`, `replay`, `baseline`, `visual`, `tests`, `affected`, `lock`, `meta`, `checkpoint`, `doctor`, `mcp`, `skill` and the Unity SDK work today; `loop` is early.
 
 ## Install
 - `pipx install playcal` (Python 3.10+)
@@ -24,6 +24,7 @@
 - `playcal calibrate --human FILE... --bot FILE... [--min-attempts 5] [--json]`: predicted human attempt pass rate per level from bot runs, fit on levels a human panel played (random-effects logit regression). Each level has `predicted`, `ci` (95%), `calibration` (true if humans played it) and `human_pass_rate` when seen. `leave_one_out` gives `inside_interval`/`levels` and `median_abs_error`; it is null under 4 calibration levels. Exit 2: fewer than 3 calibration levels or no valid events.
 - `playcal doctor [--project P] [--json]`: checks Python, git, the Unity CLI, open Editors (running, blocked by a dialog, Safe Mode) and whether P has the SDK. Run it when a loop command fails before anything happened; exit 1 means a check failed.
 - `playcal lock take PATH... --owner NAME [--ttl 30m]`, `playcal lock check PATH...`, `playcal lock release PATH... --owner NAME`, `playcal lock list`: advisory locks for scenes and assets when several agents share a project. Take the lock before you edit a scene. take is all or nothing and exits 1 with `held: {path: {owner, expires_in}}` when someone else has it; wait or pick other work.
+- `playcal meta [--project P] [--limit N] [--json]`: offline .meta/GUID check, no Editor. Run it after moving, renaming, copying or deleting files under Assets/ with the shell. Errors (exit 1): duplicate_guid, moved_without_meta (move the .meta next to the asset), bad_meta, missing_script. Warnings: missing_meta, orphan_meta, meta_case, missing_ref, class_name. Exit 2 when P has no Assets/.
 - Unity SDK perf: `PlaycalFrames.Begin("name")` in play mode, then `Save()` writes `persistentDataPath/playcal/frames-name.json` for `playcal baseline`. Editor GC numbers include Editor overhead; baseline a player build.
 - Unity SDK screenshots: `yield return PlaycalShots.Capture("name")` or `PlaycalShots.CaptureCamera("name", cam)` writes `persistentDataPath/playcal/shots/name.png` for `playcal visual`. In batch mode Capture renders Camera.main (no overlay UI); `-nographics` can't capture.
 - `playcal logs [PATH|-] [--since TEXT] [--limit N] [--json]`: summarizes a Unity log; `first_cause` is the error to fix first. Exit 1 = errors found.

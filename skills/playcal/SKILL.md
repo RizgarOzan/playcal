@@ -14,6 +14,7 @@ Run `playcal <command> --json` and read the JSON. Exit code 0 means ok.
 - Scripts changed: `playcal loop run ... --compile`, then `playcal logs --since "Reloading assemblies"` for the first cause.
 - Something is red in the console: `playcal logs` first, it collapses repeats and names the first cause.
 - Big command output: `playcal query` to keep only the fields you need instead of reading the whole hierarchy.
+- Moved, renamed, copied or deleted files under Assets/ outside the Editor: `playcal meta` before Unity imports them.
 - Before a risky step: `playcal checkpoint save`; `playcal loop run --checkpoint` does it for you.
 - Does it still run: `playcal observe` (press Play, diff the scene, collect errors), `playcal visual check` for a screenshot diff.
 - Playtest data: `ingest` validates, `report` summarizes, `calibrate` predicts human pass rates from bot runs.
@@ -97,6 +98,13 @@ run a Unity Editor command safely: wait until ready, run, wait again, one digest
 - `--checkpoint`: save files with playcal checkpoint before the write; on failure the digest says how to undo
 - `--compile`: also run `unity recompile` and fail with the compile errors; the Editor says ready even when scripts don't build
 - `--reload-wait`: after the write, wait this long for a reload to start before trusting ready (default: 20 when the command says it needs a recompile, else 0)
+
+## playcal meta
+
+find .meta and GUID damage (copied, moved or missing .meta files, missing scripts) before Unity imports it, without an Editor.
+
+- `--project`: Unity project folder (the one with Assets/), default .
+- `--limit`: text output: lines per kind (default 20, 0 = all)
 
 ## playcal observe
 
