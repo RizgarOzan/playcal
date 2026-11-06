@@ -10,7 +10,7 @@
 
 **One open-source toolkit for AI agents that build games.** It gives your agent a loop it can trust (edit → wait until the editor has really settled → check the change actually landed → look only at what changed → assert), and it checks bot playtests against real players: *"the bot finds level 12 easy, but people will pass it about 41% of the time (CI 30–53%)."*
 
-Unity first, built on top of Unity's official CLI. Godot and Unreal plug into the same core later.
+Unity first, built on top of Unity's official CLI. Godot works too (headless, through a probe script). Unreal is postponed, see the table below.
 
 *AI agents: read [llms.txt](llms.txt) first.*
 
@@ -396,7 +396,9 @@ For the visual gate, `PlaycalShots.Capture("level4-start")` saves a screenshot t
 | `lock` | scene/asset locks for several agents at once | ✅ works (advisory lock files with expiry) |
 | `meta` | .meta/GUID damage from files moved outside the Editor | ✅ works (offline, reads files only) |
 | `doctor` | check the setup before a run | ✅ works |
-| Godot, Unreal | same core, new backend | later |
+| `audio` | audio import settings against a folder policy, WAV loudness and peaks | ✅ works (offline, Unity `.meta` and Godot `.import`) |
+| Godot | same core, new backend | ✅ `loop settle`, `observe`, `snap`, checked on Godot 4.7.2 |
+| Unreal | same core, through Epic's editor MCP server (127.0.0.1:8000/mcp) | postponed: I don't have an Unreal install to check it against, and I won't ship an adapter I haven't run. A PR from someone who has one is welcome |
 
 Every row is one module. A module is a Python entry point in the `playcal.modules` group, with optional Editor C#, its own tests and its own benchmark scenario. New features arrive as new modules, not as new tools to install.
 
