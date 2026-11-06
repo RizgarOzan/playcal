@@ -7,14 +7,15 @@
   screenshot  save the game view to a path
   play / stop enter and leave Play Mode; status says which mode the editor is in
 
-Only Unity exists today. A module takes either an Engine or a bare runner (tests pass fake runners),
+Unity speaks to a live Editor; Godot runs headless one verb at a time (see godot.py). A module takes either an Engine or a bare runner (tests pass fake runners),
 and `wrap` turns the runner into the Unity engine.
 """
 from __future__ import annotations
 
+from .godot import Godot
 from .unity import Unity
 
-ENGINES = {"unity": Unity}
+ENGINES = {"unity": Unity, "godot": Godot}
 
 
 def get(name: str = "unity", runner=None):

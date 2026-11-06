@@ -155,6 +155,9 @@ def observe(runner, project: str | None = None, read: Sequence[str] = ("scene", 
 
 
 def _add_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--engine", choices=("unity", "godot"), default="unity",
+                   help="unity talks to the open Editor; godot runs the main scene headless (default unity)")
+    p.add_argument("--scene", help="godot only: scene to run instead of the main scene (res://...)")
     p.add_argument("--read", default="scene get_hierarchy", metavar="CMD",
                    help='Editor read to diff before and during play (default "scene get_hierarchy")')
     p.add_argument("--seconds", type=float, default=3, help="how long to let the game run before the second read (default 3)")
@@ -168,15 +171,41 @@ def _add_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--ignore", action="append", default=None, metavar="KEY",
                    help="field to leave out of the diff, repeatable (default: instanceId, isDirty)")
     p.add_argument("--limit", type=int, default=50, help="most diff entries to list (default 50)")
-    p.add_argument("--project-path", help="Unity project folder; needed when several Editors are open")
+    p.add_argument("--project-path", help="Unity project folder (needed when several Editors are open), or the Godot project folder")
     p.add_argument("--timeout", type=float, default=120, help="seconds to wait for a ready Editor (default 120)")
     p.add_argument("--json", action="store_true", help="print the digest as JSON")
 
 
+def observe_godot(godot, project: str | None = None, seconds: float = 3, expect: Sequence[str] = (),
+                  scene: str | None = None, timeout: float = 120, ignore=snap.VOLATILE, limit: int = 50) -> dict:
+    """The Godot run: one headless run of the main scene. No Play Mode to enter and no screenshot."""
+    rc, data, con = godot.observe(project, seconds, scene, timeout)
+    d: dict = {"engine": "godot", "seconds": seconds, "scene": data.get("scene")}
+    con = {"read": True, "errors_seen": con["error_total"], **con}
+    d["console"] = con
+    if "after" not in data:
+        d["read_errors"] = [{"code": "GODOT_RUN_FAILED", "message": data.get("error") or
+                             (con.get("first_cause") or {}).get("message") or f"godot exited {rc} without a tree"}]
+        reason = "read_failed"
+    else:
+        d["played_ms"] = {"min": data.get("played_ms", 0), "max": data.get("played_ms", 0)}
+        d["checks"] = [checks.check(data["after"], e) for e in expect]
+        d["diff"] = snap.compare(data["before"], data["after"], ignore, limit)
+        reason = ("errors" if con["error_total"] else
+                  "expect_failed" if not all(c["ok"] for c in d["checks"]) else "clean")
+    d["ok"], d["reason"] = reason == "clean", reason
+    d["fault"] = None if reason == "clean" else "game"
+    return d
+
+
 def _run(args: argparse.Namespace) -> int:
     ignore = snap.VOLATILE if args.ignore is None else [k for k in args.ignore if k]
-    out = observe(loop.unity_runner, args.project_path, shlex.split(args.read), args.seconds, not args.no_play,
-                  args.expect, None if args.no_shot else args.shots, args.name, args.timeout, ignore, args.limit)
+    if args.engine == "godot":
+        out = observe_godot(engines.get("godot"), args.project_path, args.seconds, args.expect, args.scene,
+                            args.timeout, ignore, args.limit)
+    else:
+        out = observe(loop.unity_runner, args.project_path, shlex.split(args.read), args.seconds, not args.no_play,
+                      args.expect, None if args.no_shot else args.shots, args.name, args.timeout, ignore, args.limit)
     if args.json:
         print(json.dumps(out, ensure_ascii=False))
     else:
@@ -208,4 +237,4 @@ def _run(args: argparse.Namespace) -> int:
 
 
 MODULE = Module(name="observe", summary="press Play, run the game a few seconds, diff the scene and collect console errors; screenshot only on red",
-                add_args=_add_args, run=_run, engines=("unity",))
+                add_args=_add_args, run=_run, engines=("unity", "godot"))

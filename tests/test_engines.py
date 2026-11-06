@@ -17,5 +17,6 @@ def test_wrap_keeps_an_engine_and_wraps_a_runner():
     eng = engines.get()
     assert engines.wrap(eng) is eng
     assert engines.wrap(lambda a: (0, {})).name == "unity"
-    with pytest.raises(ValueError, match="godot"):
-        engines.get("godot")
+    assert engines.get("godot").name == "godot"
+    with pytest.raises(ValueError, match="cryengine"):
+        engines.get("cryengine")

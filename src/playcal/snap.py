@@ -88,12 +88,22 @@ def _read_unity(cmd: str, project: str | None):
     return res["data"]
 
 
+def _read_godot(project: str | None, scene: str | None) -> dict:
+    from .engines import godot
+    try:
+        return godot.Godot().tree(project, scene)["tree"]
+    except RuntimeError as e:
+        raise SnapError(f"godot: {e}") from e
+
+
 def _add_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("action", choices=["save", "diff", "list"],
                    help="save NAME: store a read. diff A [B]: what changed from A to B (or to a live --unity read). list")
     p.add_argument("refs", nargs="*", help="save: NAME [FILE or - for stdin]. diff: A [B], each a saved name or a .json file")
     p.add_argument("--unity", metavar="CMD", help='read from the Editor, e.g. "scene get_hierarchy"')
-    p.add_argument("--project-path", help="Unity project folder, with --unity")
+    p.add_argument("--godot", action="store_true", help="read the node tree of the Godot main scene (one headless frame)")
+    p.add_argument("--scene", help="with --godot: scene to read instead of the main scene (res://...)")
+    p.add_argument("--project-path", help="Unity project folder with --unity, Godot project folder with --godot")
     p.add_argument("--dir", default=".playcal/snaps", help="where saves live (default .playcal/snaps)")
     p.add_argument("--ignore", action="append", default=None, metavar="KEY",
                    help="field to leave out of the diff, repeatable (default: instanceId). --ignore '' keeps everything")
@@ -110,7 +120,9 @@ def _run(args: argparse.Namespace) -> int:
         elif args.action == "save":
             if not args.refs:
                 raise SnapError("give a name: playcal snap save NAME")
-            if args.unity:
+            if args.godot:
+                data, source = _read_godot(args.project_path, args.scene), "godot tree"
+            elif args.unity:
                 data, source = _read_unity(args.unity, args.project_path), f"unity {args.unity}"
             else:
                 src = args.refs[1] if len(args.refs) > 1 else "-"
@@ -118,10 +130,11 @@ def _run(args: argparse.Namespace) -> int:
                 data, source = json.loads(text), "stdin" if src == "-" else src
             out = save(folder, args.refs[0], data, source)
         else:
-            if not args.refs or (len(args.refs) == 1 and not args.unity):
+            if not args.refs or (len(args.refs) == 1 and not (args.unity or args.godot)):
                 raise SnapError("diff needs A and B, or A and --unity CMD for a live read")
             a = load(folder, args.refs[0])
-            b = load(folder, args.refs[1]) if len(args.refs) > 1 else _read_unity(args.unity, args.project_path)
+            b = (load(folder, args.refs[1]) if len(args.refs) > 1 else _read_godot(args.project_path, args.scene)
+                 if args.godot else _read_unity(args.unity, args.project_path))
             ignore = VOLATILE if args.ignore is None else [k for k in args.ignore if k]
             out = compare(a, b, ignore, args.limit)
     except (SnapError, OSError, json.JSONDecodeError) as e:

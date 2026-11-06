@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Godot adapter: `loop settle --engine godot`, `observe --engine godot` and `snap --godot` run Godot headless with a probe script and report parse errors and `push_error` as file:line. Set `PLAYCAL_GODOT` when `godot` is not on PATH.
 - `playcal ui`: loop, observe, replay and visual check now append to `.playcal/history.jsonl`, and `playcal ui` draws it as one static HTML page with errors as file:line, checkpoints and diff images. `PLAYCAL_HISTORY=off` turns the history off.
 - Claude Code plugin and marketplace manifest, so `/plugin install playcal@playcal` adds the skill and the MCP server. The skill also installs with `npx skills add RizgarOzan/playcal`.
 - Unity commands moved behind an engine adapter (`playcal/engines/`), the first step toward Godot and Unreal. No behaviour change.

@@ -90,7 +90,8 @@ run a Unity Editor command safely: wait until ready, run, wait again, one digest
 - `action`: settle: wait for a ready Editor. run: settle, run, settle
 - `name`: Editor command for `run` (see `unity command`)
 - `params`: passed to the command unchanged; put them after --, e.g. run save_scene -- --name x
-- `--project-path`: Unity project folder; needed when several Editors are open
+- `--project-path`: Unity project folder (needed when several Editors are open), or the Godot project folder
+- `--engine`: godot: settle loads every script headless and reports parse errors as compile_error (default unity)
 - `--timeout`: seconds to wait for a ready Editor (default 120)
 - `--verify`: read command run after the write, e.g. "get_hierarchy --depth 1"
 - `--expect`: check on the --verify read (or the command result). PATH=VALUE, PATH!=VALUE, PATH~TEXT, or bare PATH (exists). * matches any list item: objects.*.name=Probe. Repeatable
@@ -110,6 +111,8 @@ find .meta and GUID damage (copied, moved or missing .meta files, missing script
 
 press Play, run the game a few seconds, diff the scene and collect console errors; screenshot only on red.
 
+- `--engine`: unity talks to the open Editor; godot runs the main scene headless (default unity)
+- `--scene`: godot only: scene to run instead of the main scene (res://...)
 - `--read`: Editor read to diff before and during play (default "scene get_hierarchy")
 - `--seconds`: how long to let the game run before the second read (default 3)
 - `--no-play`: don't touch Play Mode; diff two reads --seconds apart
@@ -119,7 +122,7 @@ press Play, run the game a few seconds, diff the scene and collect console error
 - `--no-shot`: never take a screenshot
 - `--ignore`: field to leave out of the diff, repeatable (default: instanceId, isDirty)
 - `--limit`: most diff entries to list (default 50)
-- `--project-path`: Unity project folder; needed when several Editors are open
+- `--project-path`: Unity project folder (needed when several Editors are open), or the Godot project folder
 - `--timeout`: seconds to wait for a ready Editor (default 120)
 
 ## playcal query
@@ -163,7 +166,9 @@ save a JSON read under a name and diff two saves, with ids that change between s
 - `action`: save NAME: store a read. diff A [B]: what changed from A to B (or to a live --unity read). list
 - `refs`: save: NAME [FILE or - for stdin]. diff: A [B], each a saved name or a .json file
 - `--unity`: read from the Editor, e.g. "scene get_hierarchy"
-- `--project-path`: Unity project folder, with --unity
+- `--godot`: read the node tree of the Godot main scene (one headless frame)
+- `--scene`: with --godot: scene to read instead of the main scene (res://...)
+- `--project-path`: Unity project folder with --unity, Godot project folder with --godot
 - `--dir`: where saves live (default .playcal/snaps)
 - `--ignore`: field to leave out of the diff, repeatable (default: instanceId). --ignore '' keeps everything
 - `--limit`: most changes to list (default 50)

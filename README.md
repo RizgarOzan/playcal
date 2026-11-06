@@ -301,6 +301,18 @@ playcal ui --last 20         # only the newest 20 runs
 
 Each row shows what ran, the verdict, compile and console errors as `file:line`, failed checks, the scene diff, the checkpoint to undo to, and the screenshot or visual diff image. The page has no server and no scripts. Set `PLAYCAL_HISTORY` to write the history somewhere else, or to `off` to write nothing.
 
+### Godot (works today, headless)
+
+No plugin goes into the project. playcal runs `godot --headless` with its own probe script, so each call is one short run. Put Godot on PATH or set `PLAYCAL_GODOT` to the binary.
+
+```bash
+playcal loop settle --engine godot --project-path my_game   # loads every .gd; a parse error is compile_error (exit 6) with file:line
+playcal observe --engine godot --project-path my_game        # runs the main scene 3 s; push_error and script errors come back as file:line, exit 1
+playcal snap save before --godot --project-path my_game      # node tree of the main scene, keyed by node path
+```
+
+There is no live editor to send commands to, so `loop run` is Unity only: edit the files, then settle. Headless runs draw nothing, so observe takes no screenshot on Godot. Checked on Godot 4.7.2 on Windows.
+
 ### `playcal meta` (works today)
 
 An agent that moves `Player.cs` with `mv` leaves `Player.cs.meta` behind. Unity gives the script a new GUID on the next import and every scene that used it shows "Missing script". `meta` reads the project files, no Editor needed, and catches that before the import:

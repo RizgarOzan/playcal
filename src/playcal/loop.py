@@ -318,7 +318,9 @@ def _add_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("action", choices=["settle", "run"], help="settle: wait for a ready Editor. run: settle, run, settle")
     p.add_argument("name", nargs="?", help="Editor command for `run` (see `unity command`)")
     p.add_argument("params", nargs="*", help="passed to the command unchanged; put them after --, e.g. run save_scene -- --name x")
-    p.add_argument("--project-path", help="Unity project folder; needed when several Editors are open")
+    p.add_argument("--project-path", help="Unity project folder (needed when several Editors are open), or the Godot project folder")
+    p.add_argument("--engine", choices=("unity", "godot"), default="unity",
+                   help="godot: settle loads every script headless and reports parse errors as compile_error (default unity)")
     p.add_argument("--timeout", type=float, default=120, help="seconds to wait for a ready Editor (default 120)")
     p.add_argument("--verify", metavar="CMD", help='read command run after the write, e.g. "get_hierarchy --depth 1"')
     p.add_argument("--expect", action="append", default=[], metavar="PATH=VALUE",
@@ -339,7 +341,15 @@ def _run(args: argparse.Namespace) -> int:
     if args.action == "run" and not args.name:
         print("playcal loop run: give an Editor command name", file=sys.stderr)
         return 2
-    if args.action == "settle":
+    if args.engine == "godot":
+        if args.action != "settle":
+            print("playcal loop: Godot has no live Editor to run commands in; edit files, then `loop settle --engine godot`",
+                  file=sys.stderr)
+            return 2
+        from .engines import godot
+        out = godot.Godot().check(args.project_path, args.timeout)
+        reason = out["reason"]
+    elif args.action == "settle":
         out = settle(unity_runner, args.project_path, args.timeout)
         reason = out["reason"]
         if reason == "ready" and args.compile:
@@ -354,7 +364,8 @@ def _run(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(out, ensure_ascii=False))
     else:
-        print(f"{reason} ({' -> '.join(out.get('states_seen') or out.get('before', {}).get('states_seen', []))})")
+        seen = out.get('states_seen') or out.get('before', {}).get('states_seen', [])
+        print(f"{reason} ({' -> '.join(seen)})" if seen else reason)
         if "hint" in out:
             print(out["hint"])
         for e in (out.get("result") or {}).get("errors", []):
