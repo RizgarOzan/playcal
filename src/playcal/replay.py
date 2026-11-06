@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import loop, observe
+from . import engines
 from .registry import Module
 
 HEADER = "playcal-replay 1"
@@ -112,7 +113,7 @@ def _project(runner, project: str | None) -> Path | None:
     if project:
         p = Path(project)
     else:
-        res = loop._call(runner, ["editor", "status"], None)
+        res = engines.wrap(runner).status(None)
         path = ((res["data"] or {}).get("result") or {}).get("projectPath") if res["success"] else None
         if not path:
             return None
@@ -134,11 +135,12 @@ def _wait(paths, timeout: float, sleep, clock) -> Path | None:
 def _session(runner, project: str | None, folder: Path, request: dict, wait_for: list[Path], wait: float,
              timeout: float, stay_on: Path | None, sleep, clock) -> dict:
     """Writes the request, enters Play, waits for one of `wait_for`, leaves Play unless `stay_on` showed up."""
-    d: dict = {"before": loop.settle(runner, project, timeout, sleep=sleep, clock=clock), "file": None}
+    eng = engines.wrap(runner)
+    d: dict = {"before": eng.ready(project, timeout, sleep=sleep, clock=clock), "file": None}
     if not d["before"]["settled"]:
         d["reason"] = d["before"]["reason"]
         return d
-    con_mark, status = loop._reads(runner, project, [["console", "status"], ["editor", "status"]])
+    con_mark, status = eng.read([eng.CONSOLE_MARK, eng.STATUS], project)
     if observe._playing(status):
         d["reason"] = "already_playing"  # the request is only read when Play starts
         return d
@@ -148,7 +150,7 @@ def _session(runner, project: str | None, folder: Path, request: dict, wait_for:
     request = {**request, "created": int(time.time())}  # the SDK skips a request left over from an old run
     req.write_text("".join(f"{k}={v}\n" for k, v in request.items()), encoding="utf-8")
     try:  # never leave a request behind: the next Play would pick it up
-        res = loop._call(runner, ["editor.playmode", "start"], project)
+        res = eng.play(project)
         if not res["success"]:
             d["reason"], d["play_errors"] = "play_failed", res["errors"]
             return d
@@ -162,9 +164,9 @@ def _session(runner, project: str | None, folder: Path, request: dict, wait_for:
             got = _wait(wait_for, wait, sleep, clock)
             if got is None:  # a request still on disk was never read: the SDK isn't in the project
                 d["reason"] = "no_sdk" if req.exists() else "no_result"
-        d["console"] = observe._console(loop._call(runner, observe._since(mark), project) if mark else None, 20)
+        d["console"] = observe._console(eng.run(eng.console_since(mark), project) if mark else None, 20)
         if got is None or got != stay_on:  # stop comes back once Edit Mode is back
-            d["left_play"] = loop._call(runner, ["editor.playmode", "stop"], project)["success"]
+            d["left_play"] = eng.stop(project)["success"]
         d["file"] = str(got) if got else None
         return d
     finally:
@@ -223,16 +225,17 @@ def run(runner, project: str | None, name: str, stop_at: int | None = None, tole
 
 
 def step(runner, project: str | None, frames: int = 1) -> dict:
-    res = loop._call(runner, ["editor", "status"], project)
+    eng = engines.wrap(runner)
+    res = eng.status(project)
     mode = ((res["data"] or {}).get("result") or {}).get("playMode") if res["success"] else None
     if mode not in ("playing", "paused"):
         return {"ok": False, "reason": "not_playing"}
     for _ in range(frames):
-        res = loop._call(runner, ["script", "eval", "--code", "UnityEditor.EditorApplication.isPaused = true; "
+        res = eng.run(["script", "eval", "--code", "UnityEditor.EditorApplication.isPaused = true; "
                                   "UnityEditor.EditorApplication.Step(); return 0;"], project)
         if not res["success"]:
             return {"ok": False, "reason": "eval_failed", "errors": res["errors"]}
-    res = loop._call(runner, ["script", "eval", "--code", "return Playcal.PlaycalReplay.Frame;"], project)
+    res = eng.run(["script", "eval", "--code", "return Playcal.PlaycalReplay.Frame;"], project)
     frame = ((res["data"] or {}).get("result") or {}).get("result") if res["success"] else None
     return {"ok": True, "reason": "stepped", "steps": frames, "frame": int(frame) if frame not in (None, "") else None}
 

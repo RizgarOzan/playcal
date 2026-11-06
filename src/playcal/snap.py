@@ -77,11 +77,12 @@ def compare(a, b, ignore=VOLATILE, limit: int = 50) -> dict:
 
 
 def _read_unity(cmd: str, project: str | None):
-    from . import loop
-    ready = loop.settle(loop.unity_runner, project, timeout=60, stable=1)  # a read: a flicker fails loudly
+    from . import engines
+    eng = engines.get()
+    ready = eng.ready(project, timeout=60, stable=1)  # a read: a flicker fails loudly
     if not ready["settled"]:
         raise SnapError(f"Editor not ready: {ready['reason']}. {ready.get('hint', '')}".strip())
-    res = loop._call(loop.unity_runner, shlex.split(cmd), project)
+    res = eng.run(shlex.split(cmd), project)
     if not res["success"]:
         raise SnapError(f"{cmd} failed: {json.dumps(res['errors'], ensure_ascii=False)}")
     return res["data"]

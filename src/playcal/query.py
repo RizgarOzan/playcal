@@ -51,11 +51,12 @@ def _add_args(p: argparse.ArgumentParser) -> None:
 
 def _load(args) -> tuple:
     if args.unity:
-        from . import loop
-        ready = loop.settle(loop.unity_runner, args.project_path, timeout=60, stable=1)  # a read: a flicker fails loudly
+        from . import engines
+        eng = engines.get()
+        ready = eng.ready(args.project_path, timeout=60, stable=1)  # a read: a flicker fails loudly
         if not ready["settled"]:
             return None, ready
-        res = loop._call(loop.unity_runner, shlex.split(args.unity), args.project_path)
+        res = eng.run(shlex.split(args.unity), args.project_path)
         if not res["success"]:
             return None, {"reason": "command_failed", "errors": res["errors"]}
         data = res["data"]

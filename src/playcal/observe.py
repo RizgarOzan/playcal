@@ -26,6 +26,7 @@ import time
 from typing import Callable, Sequence
 
 from . import checks, logs, loop, snap
+from . import engines
 from .registry import Module
 
 EXIT = {"clean": 0, "errors": 1, "expect_failed": 1, "read_failed": 1, "play_failed": 1, "console_unread": 3}
@@ -35,11 +36,6 @@ NOT_PLAYING = {"code": "NOT_PLAYING", "message": "the Editor didn't enter Play M
 def _mark(res: dict) -> dict | None:
     r = ((res["data"] or {}).get("result") or {}) if res["success"] else {}
     return {"cursor": r["cursor"], "session": r.get("session")} if "cursor" in r else None
-
-
-def _since(mark: dict) -> list[str]:
-    return ["console", "get", "--level", "error", "--since", str(mark["cursor"]),
-            *(["--since-session", mark["session"]] if mark.get("session") else [])]
 
 
 def _console(res: dict | None, limit: int) -> dict:
@@ -77,9 +73,9 @@ def _enter_play(runner, project, timeout, sleep, clock) -> dict:
     start comes back once the reload is done and `editor status` says "playing" right away, while
     `unity status` can list no Editor for a few seconds more. An Editor that answers and sits idle in
     Edit Mode isn't going to enter it (compile errors block Play), so that ends the wait."""
-    start = clock()
+    eng, start = engines.wrap(runner), clock()
     while True:
-        res = loop._call(runner, ["editor", "status"], project)
+        res = eng.status(project)
         r = ((res["data"] or {}).get("result") or {}) if res["success"] else {}
         busy = not res["success"] or bool(r.get("compiling") or r.get("domainReloadInProgress"))
         if _playing(res) or not busy or clock() - start >= timeout:
@@ -92,9 +88,9 @@ def observe(runner, project: str | None = None, read: Sequence[str] = ("scene", 
             play: bool = True, expect: Sequence[str] = (), shots: str | None = ".playcal/observe", name: str = "observe",
             timeout: float = 120, ignore=snap.VOLATILE, limit: int = 50,
             sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic) -> dict:
-    t0 = clock()
+    t0, eng = clock(), engines.wrap(runner)
     d: dict = {"read": list(read), "seconds": seconds,
-               "before": loop.settle(runner, project, timeout, sleep=sleep, clock=clock)}
+               "before": eng.ready(project, timeout, sleep=sleep, clock=clock)}
 
     def done(reason: str, result=None) -> dict:
         d["ok"], d["reason"] = reason == "clean", reason
@@ -107,19 +103,19 @@ def observe(runner, project: str | None = None, read: Sequence[str] = ("scene", 
     if not d["before"]["settled"]:
         return done(d["before"]["reason"])
     t_ask = clock()
-    first, con_mark, status = loop._reads(runner, project, [list(read), ["console", "status"], ["editor", "status"]])
+    first, con_mark, status = eng.read([list(read), eng.CONSOLE_MARK, eng.STATUS], project)
     t_watch = clock()
     if not first["success"]:
         d["read_errors"] = first["errors"]
         return done("read_failed", first)
     mark = _mark(con_mark)
-    since = [_since(mark)] if mark else []
+    since = [eng.console_since(mark)] if mark else []
 
     started = False
     try:  # whatever happens after Play starts, leave Play Mode again
         if play and not _playing(status):
             t_ask = clock()
-            res = loop._call(runner, ["editor.playmode", "start"], project)
+            res = eng.play(project)
             if not res["success"]:
                 d["play_errors"] = res["errors"]
                 return done("play_failed", res)
@@ -127,7 +123,7 @@ def observe(runner, project: str | None = None, read: Sequence[str] = ("scene", 
             d["entered_play"] = _enter_play(runner, project, timeout, sleep, clock)
             t_watch = clock()
             if not d["entered_play"]["playing"]:
-                d["console"] = _console(loop._reads(runner, project, since)[0] if mark else None, 20)
+                d["console"] = _console(eng.read(since, project)[0] if mark else None, 20)
                 if d["entered_play"]["busy"]:
                     return done("timeout")
                 d["play_errors"] = [NOT_PLAYING]
@@ -135,7 +131,7 @@ def observe(runner, project: str | None = None, read: Sequence[str] = ("scene", 
         sleep(max(0.0, seconds - (clock() - t_watch)))
 
         t_read = clock()
-        second, *con = loop._reads(runner, project, [list(read), *since])
+        second, *con = eng.read([list(read), *since], project)
         d["played_ms"] = {"min": round((t_read - t_watch) * 1000), "max": round((clock() - t_ask) * 1000)}
         d["console"] = _console(con[0] if con else None, 20)
         d["checks"] = [checks.check(second["data"], e) for e in expect] if second["success"] else []
@@ -145,12 +141,12 @@ def observe(runner, project: str | None = None, read: Sequence[str] = ("scene", 
         if not second["success"]:
             d["read_errors"] = second["errors"]
         if reason != "clean" and shots:
-            cap = loop._call(runner, ["capture", "game_view", "--output-path", f"{shots.rstrip('/')}/{name}.png"], project)
+            cap = eng.screenshot(f"{shots.rstrip('/')}/{name}.png", project)
             res = (cap["data"] or {}).get("result") or {}
             d["shot"] = res.get("savedPath") if cap["success"] else {"failed": cap["errors"]}
     finally:
         if started:  # stop comes back once Edit Mode is back; the next command settles first anyway
-            d["left_play"] = loop._call(runner, ["editor.playmode", "stop"], project)["success"]
+            d["left_play"] = eng.stop(project)["success"]
             if "elapsed_ms" in d:  # an early return inside the try: count the stop too
                 d["elapsed_ms"] = round((clock() - t0) * 1000)
     if second["success"]:
