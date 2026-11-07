@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 (2026-11-07)
+
+- `playcal doctor` ends with a link to the issue tracker.
+
 ## 0.2.0 (2026-11-07)
 
 - `playcal assets check`: texture import settings (type, mipmaps, Read/Write, compression, max size) against a folder policy, plus the real image size, offline.
