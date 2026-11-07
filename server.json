@@ -7,12 +7,12 @@
     "source": "github"
   },
   "websiteUrl": "https://pypi.org/project/playcal/",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "playcal",
-      "version": "0.1.3",
+      "version": "0.2.0",
       "runtimeHint": "uvx",
       "packageArguments": [
         { "type": "positional", "value": "mcp", "valueHint": "mcp" }

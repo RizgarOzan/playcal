@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 (2026-11-07)
 
 - `playcal assets check`: texture import settings (type, mipmaps, Read/Write, compression, max size) against a folder policy, plus the real image size, offline.
 - `calibrate --targets` and `report --targets`: a pass-rate band per level; a level outside its band is named and the command exits 1.
