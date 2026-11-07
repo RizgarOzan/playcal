@@ -82,6 +82,7 @@ def _run(args: argparse.Namespace) -> int:
     else:
         for c in checks:
             print(f"{c['status']:4}  {c['check']}: {c['detail']}")
+        print("\nSomething wrong or missing? github.com/RizgarOzan/playcal/issues")
     return 1 if any(c["status"] == "fail" for c in checks) else 0
 
 
