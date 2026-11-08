@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2 (2026-11-08)
+
+- Plain-text and `--json` output no longer crash on a Windows console that can't encode a file name (e.g. a combining cedilla under cp1254); unencodable characters print as `?`.
+- `loop settle --engine godot` without a Godot binary prints the `GODOT_MISSING` hint in plain text too, not only with `--json`.
+
 ## 0.2.1 (2026-11-07)
 
 - `playcal doctor` ends with a link to the issue tracker.
