@@ -73,6 +73,10 @@ def parse(argv: list[str]) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure:  # a cp1254 console can't print every file name
+            reconfigure(errors="replace")
     args = parse(sys.argv[1:] if argv is None else argv)
     return args.func(args)
 

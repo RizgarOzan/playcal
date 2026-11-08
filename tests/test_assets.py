@@ -53,3 +53,17 @@ def test_oversized_image_without_a_cap(tmp_path):
                                                 "compress/mode=0\n", encoding="utf-8")
     assert assets.check(tmp_path, {"rules": [{"match": "ui/*", "max_size": 2048}]})["ok"]
     assert assets.import_settings(big) == {"engine": "godot", "mipmaps": False, "compressed": False, "max_size": 1024}
+
+
+def test_plain_output_survives_a_console_that_cannot_encode_the_path(tmp_path):
+    import os
+    import subprocess
+    import sys
+    b = png(tmp_path / "Assets/UI/Kaçak.png", 8, 8)
+    meta(b, texture_type=0, mip=1)
+    env = {**os.environ, "PYTHONIOENCODING": "cp1254"}
+    for extra in ([], ["--json"]):
+        p = subprocess.run([sys.executable, "-m", "playcal.cli", "assets", "check", "--project-path", str(tmp_path), *extra],
+                           capture_output=True, env=env)
+        assert p.returncode == 1, p.stderr.decode("cp1254", "replace")
+        assert b"Traceback" not in p.stderr
