@@ -65,6 +65,7 @@ def test_missing_godot_and_missing_project(tmp_path):
     assert godot.Godot(fake("", {})).check(str(tmp_path))["reason"] == "no_editor"
     out = godot.Godot(lambda a, t: (127, "ERROR: GODOT_MISSING: x")).check(project(tmp_path))
     assert out["reason"] == "no_editor" and out["console"]["first_cause"]["code"] == "GODOT_MISSING"
+    assert "GODOT_MISSING" in out["hint"]  # loop settle prints the hint in plain text
 
 
 def test_fresh_project_is_imported_first(tmp_path):

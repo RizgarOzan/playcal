@@ -107,8 +107,9 @@ class Godot:
         con = summarize(text)
         if "checked" not in data:
             reason = "no_editor" if rc in (127, 2) else "timeout" if rc == 124 else "compile_check_failed"
+            hint = data.get("error") or (con["first_cause"] or {}).get("message")
             return {"settled": False, "reason": reason, "engine": "godot", "console": con,
-                    **({"hint": data["error"]} if data.get("error") else {})}
+                    **({"hint": hint} if hint else {})}
         parse = [e for e in con["errors"] if e["kind"] == "compile"]
         return {"settled": not parse, "reason": "ready" if not parse else "compile_error", "engine": "godot",
                 "scripts": data["checked"], "compile": {"ok": not parse, "count": len(parse), "errors": parse}}
