@@ -67,3 +67,18 @@ def test_plain_output_survives_a_console_that_cannot_encode_the_path(tmp_path):
                            capture_output=True, env=env)
         assert p.returncode == 1, p.stderr.decode("cp1254", "replace")
         assert b"Traceback" not in p.stderr
+
+
+def test_tga_and_psd_image_size(tmp_path):
+    tga = tmp_path / "ui" / "huge.tga"
+    tga.parent.mkdir(parents=True, exist_ok=True)
+    tga.write_bytes(b"\x00\x00\x02" + b"\x00" * 9 + struct.pack("<HH", 4096, 2048) + b"\x20\x00")
+    psd = tmp_path / "ui" / "huge.psd"
+    psd.write_bytes(b"8BPS\x00\x01" + b"\x00" * 6 + struct.pack(">HII", 4, 2160, 3840) + b"\x00\x08\x00\x03")
+    out = assets.check(tmp_path, {"rules": [{"match": "ui/*", "max_size": 2048}]})
+    by_file = {r["file"]: r["size"] for r in out["results"]}
+    assert by_file == {"ui/huge.psd": [3840, 2160], "ui/huge.tga": [4096, 2048]}
+    assert [(p["file"], p["problem"]) for p in out["problems"]] == [
+        ("ui/huge.psd", "image_size"),
+        ("ui/huge.tga", "image_size"),
+    ]
