@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- `playcal mcp` lists ten core tools by default (about 2.7k tokens with the instructions, down from 5.6k); `playcal mcp --all` serves every module. A test keeps the default under 3k tokens.
+- `loop run` refuses a write into an Editor in Play Mode after one `editor status` call, with reason `play_mode` (exit 4) and a hint, instead of settling twice around a write Unity refuses anyway. `editor.playmode` commands still run.
+- `calibrate` scores its leave-one-out predictions with Spearman and mean absolute error, each with a 95% bootstrap interval, next to a baseline that knows only the level order.
+- `ingest --from gameanalytics|firebase` reads a GameAnalytics raw export or a GA4/Firebase BigQuery export and turns its level events into playcal events, with attempts counted from the starts and ids hashed. Written against the public field docs; not yet tried on a real export.
+- `calibrate --prereg FILE`: thresholds written before looking at the data (`min_levels`, `spearman_min`, `mae_max`, `beat_baseline`). A miss exits 1.
+- Works with Unity CLI 1.0 and Pipeline 1.0.1, which print `unity command` results without the old `{success, data}` envelope and send command errors to stderr only. Before this, every command read as failed on the new CLI. Both shapes are read now.
+
 ## 0.2.2 (2026-11-08)
 
 - Plain-text and `--json` output no longer crash on a Windows console that can't encode a file name (e.g. a combining cedilla under cp1254); unencodable characters print as `?`.

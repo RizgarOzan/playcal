@@ -18,8 +18,9 @@ def build_parser() -> argparse.ArgumentParser:
     m.add_argument("--json", action="store_true")
     m.set_defaults(func=_list_modules)
 
-    sub.add_parser("mcp", help="serve every module as an MCP tool over stdio").set_defaults(
-        func=lambda a: surfaces.serve())
+    mc = sub.add_parser("mcp", help="serve the core modules as MCP tools over stdio")
+    mc.add_argument("--all", action="store_true", help="serve every installed module, not just the core set")
+    mc.set_defaults(func=lambda a: surfaces.serve(all_tools=a.all))
     sk = sub.add_parser("skill", help="print a SKILL.md for coding agents, built from the installed modules")
     sk.add_argument("--project", metavar="DIR", help="write .claude/skills/playcal/SKILL.md into this game project, "
                     "with its engine and red gate first")

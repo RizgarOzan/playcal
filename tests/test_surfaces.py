@@ -86,3 +86,16 @@ def test_shipped_skill_and_plugin_match_the_code():
     root = Path(__file__).resolve().parents[1]
     assert (root / "skills/playcal/SKILL.md").read_text(encoding="utf-8").replace("\r\n", "\n") == surfaces.skill_md() + "\n"
     assert json.loads((root / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))["version"] == __version__
+
+
+def test_default_tool_list_stays_small_and_all_serves_everything():
+    msgs = [{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}]
+    out = io.StringIO()
+    surfaces.serve(io.StringIO("".join(json.dumps(m) + "\n" for m in msgs)), out)
+    init, listed = [json.loads(x)["result"] for x in out.getvalue().splitlines()]
+    assert {t["name"] for t in listed["tools"]} == {f"playcal_{n}" for n in surfaces.CORE}
+    # rough token count (chars / 4) of what the agent pays for on every turn
+    assert (len(json.dumps(listed["tools"])) + len(init["instructions"])) // 4 < 3000
+    out = io.StringIO()
+    surfaces.serve(io.StringIO(json.dumps(msgs[1]) + "\n"), out, all_tools=True)
+    assert len(json.loads(out.getvalue())["result"]["tools"]) == len(MODS)

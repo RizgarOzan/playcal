@@ -16,6 +16,7 @@ from typing import Iterable, Iterator
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from .convert import FORMATS, convert
 from .registry import Module
 
 PASTE_PREFIX = "PC0:"
@@ -79,6 +80,14 @@ def check_lines(lines: Iterable[tuple[str, str]]) -> Result:
 
 
 def _read_inputs(args: argparse.Namespace) -> Iterator[tuple[str, str]]:
+    fmt = getattr(args, "source_format", None)
+    if fmt:
+        yield from convert(_raw_lines(args), fmt, args.game, args.game_version)
+    else:
+        yield from _raw_lines(args)
+
+
+def _raw_lines(args: argparse.Namespace) -> Iterator[tuple[str, str]]:
     for path in args.files:
         text = sys.stdin.read() if path == "-" else Path(path).read_text(encoding="utf-8")
         name = "stdin" if path == "-" else path
@@ -92,6 +101,10 @@ def _read_inputs(args: argparse.Namespace) -> Iterator[tuple[str, str]]:
 def _add_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("files", nargs="+", help="JSONL files, or '-' for stdin")
     p.add_argument("--paste", action="store_true", help="inputs are free text containing PC0: blobs")
+    p.add_argument("--from", dest="source_format", choices=FORMATS,
+                   help="inputs are an analytics export (one JSON row per line); level events become playcal events")
+    p.add_argument("--game", help="with --from: game name to use instead of the one in the export")
+    p.add_argument("--game-version", help="with --from: game version (the exports often lack one; default: unknown)")
     p.add_argument("--out", default="accepted.jsonl", help="where valid events go (default: accepted.jsonl)")
     p.add_argument("--rejected", default="rejected.jsonl", help="where invalid lines go, with a reason")
     p.add_argument("--json", action="store_true", help="print a JSON summary")

@@ -58,7 +58,9 @@ Do not change project files yet.
 
 ### MCP server and skill
 
-`playcal mcp` is a stdio MCP server. Every module becomes a tool (`playcal_ingest`, `playcal_logs`, `playcal_loop`, ...), built from the same argument definitions as the CLI, so the two can't drift apart.
+`playcal mcp` is a stdio MCP server. Modules become tools (`playcal_ingest`, `playcal_logs`, `playcal_loop`, ...), built from the same argument definitions as the CLI, so the two can't drift apart.
+
+Every tool schema sits in the agent's context on every turn, so by default the server only lists the ten an agent reaches for most: `doctor`, `loop`, `logs`, `observe`, `checkpoint`, `meta`, `query`, `ingest`, `report` and `calibrate`. That's about 2.7k tokens with the instructions, where all twenty were 5.6k. The rest still work from a shell (`playcal visual --json`), and `playcal mcp --all` serves every module. A test fails if the default list grows past 3k tokens.
 
 The server's `initialize` reply carries a short "which command when" guide as MCP `instructions`, the same lines that open the skill file, so an agent knows to run `doctor` first and to put Editor writes through `loop`.
 
@@ -104,6 +106,18 @@ playcal ingest whatsapp-export.txt --paste
 
 Valid events go to `accepted.jsonl`. Every line that fails goes to `rejected.jsonl` with the reason.
 
+If the studio already sends level events to an analytics service, there's no need to add the SDK first. `--from` reads two exports, one JSON row per line:
+
+```bash
+playcal ingest ga-export.json --from gameanalytics --game-version 1.4
+playcal ingest events_20261122.json --from firebase
+```
+
+- `gameanalytics` is the GameAnalytics raw data export. Progression events (`Start`, `Fail`, `Complete`) become level events; the level is the progression path, like `World1:Level3`.
+- `firebase` is the GA4 / Firebase BigQuery export, for example from `bq extract --destination_format NEWLINE_DELIMITED_JSON`. It reads `level_start` and `level_end`; `level_end` with `success` false counts as a fail.
+
+Everything else in the export is skipped. Neither format numbers every attempt, so playcal counts them per player and level from the starts, in time order (GameAnalytics' `attempt_num` is used when it's there). Player and session ids are hashed. Both converters follow the public field docs, which have no sample files, so they haven't seen a real export yet. Unity Gaming Services and PlaytestCloud aren't supported: UGS has no standard level events, each game names its own, and PlaytestCloud exports survey answers as Excel or PDF, not per-level results.
+
 The schema doesn't accept unknown fields, so names, emails, device IDs, location and IP can't slip in. See [PRIVACY.md](PRIVACY.md).
 
 ### `playcal report` (works today)
@@ -130,6 +144,23 @@ playcal calibrate --human panel.jsonl --bot bots.jsonl
 ```
 
 Both files use the same event schema. It fits human logits to bot logits per level with a random-effects regression, so levels that the bots get wrong in their own way make every interval wider instead of quietly pulling the line. You need humans on at least 3 levels (5+ attempts each, `--min-attempts`). From 4 levels on it also leaves each one out in turn and checks whether its real rate lands in the predicted interval; that line tells you how far to trust the rest. With a handful of levels the intervals are wide, and that's the honest answer.
+
+It also scores itself against a baseline that knows only the level order. Both predict every calibration level from the others, and you get the Spearman rank correlation and the mean absolute error against what people actually did, each with a 95% bootstrap interval:
+
+```
+bot model: spearman 1.00 [1.00, 1.00], mean error 3.2 points [1.6, 4.7] (leave-one-out, 95% bootstrap)
+level-order baseline: spearman -0.88 [-1.00, -0.50], mean error 35.5 points [27.4, 43.6] (leave-one-out, 95% bootstrap)
+```
+
+If the bots can't beat "later levels are harder", they aren't telling you anything. To make that a test you can fail, write the thresholds down before you look at the data and pass them with `--prereg`:
+
+```bash
+echo '{"min_levels": 15, "spearman_min": 0.6, "mae_max": 0.10, "beat_baseline": true}' > prereg.json
+playcal calibrate --human panel.jsonl --bot bots.jsonl --prereg prereg.json
+# preregistered thresholds: FAIL: 8 calibration levels, preregistered minimum 15
+```
+
+A miss exits 1 and the JSON says which threshold failed. The numbers above come from the test data, not from a real panel; nobody has run this on a real one yet.
 
 Give it the difficulty you designed for and it becomes a gate. `--targets targets.json` holds a pass-rate band per level, like `{"4": [40, 60]}`. Any level whose predicted rate falls outside its band prints `level 4: predicted 25%, target 40%-60%` and the command exits 1, so CI can stop a build that made a level too hard. `playcal report --targets` does the same with the measured attempt pass rate.
 
@@ -390,11 +421,11 @@ For the visual gate, `PlaycalShots.Capture("level4-start")` saves a screenshot t
 
 | Module | What it does | State |
 |---|---|---|
-| `ingest` | event schema, validation, paste blobs | ✅ works |
+| `ingest` | event schema, validation, paste blobs, GameAnalytics and GA4/Firebase exports | ✅ works; the export converters follow the docs and haven't met a real export yet |
 | `report` | per-level pass rate, attempts, Wilson CI | ✅ works |
 | Unity SDK | level events, PC0 "send result" line, delete-my-data, under-18 off | ✅ works |
 | `loop` | edit → settle (compile/reload, focus, modal) → verify write → diff → assert, one JSON digest | ✅ read, write and `--expect` checked on a live Unity 6000.3 Editor; Safe Mode branch not seen live |
-| `calibrate` / `predict` | bot metrics + small human panel → predicted human pass rate with CI | ✅ works on attempt pass rates; not yet checked against a real panel |
+| `calibrate` / `predict` | bot metrics + small human panel → predicted human pass rate with CI | ✅ works on attempt pass rates, scored against a level-order baseline, `--prereg` thresholds; not yet checked against a real panel |
 | `query` | pick, filter and project fields from any JSON result (file, stdin or a Unity read command) | ✅ works on JSON and on live `scene get_hierarchy` reads |
 | `checkpoint` | every agent step is a git-backed, revertible checkpoint | ✅ works (`loop run --checkpoint` saves before each write) |
 | `logs` | console/Editor.log summary: dedupe, first cause, error kinds | ✅ works |
@@ -412,26 +443,29 @@ For the visual gate, `PlaycalShots.Capture("level4-start")` saves a screenshot t
 | Godot | same core, new backend | ✅ `loop settle`, `observe`, `snap`, checked on Godot 4.7.2 |
 | Unreal | same core, through Epic's editor MCP server (127.0.0.1:8000/mcp) | postponed: I don't have an Unreal install to check it against, and I won't ship an adapter I haven't run. A PR from someone who has one is welcome |
 
+When to stop: the `loop` row exists because Unity's own CLI drops writes during a domain reload. If Unity's CLI or its official MCP server starts landing those writes (a mid-reload write that comes back landed in `bench/live.py`, 3 of 3), the loop has done its job and I'll retire it rather than keep a second copy of the Editor's own logic. The same goes for calibration: if it misses the preregistered thresholds on the first real panel (Spearman at least 0.6 and mean error at most 10 points, on 15 or more levels, and better than the level-order baseline), that result gets published and the 2.0 work on it stops.
+
 Every row is one module. A module is a Python entry point in the `playcal.modules` group, with optional Editor C#, its own tests and its own benchmark scenario. New features arrive as new modules, not as new tools to install.
 
 ## Benchmark
 
-[`bench/live.py`](bench/live.py) runs one write against a real, open Editor in four states, two ways: a naive agent that sends the plain `unity command` and trusts `success`, and `playcal loop run` with a read-back check. "Landed" is read back from the Editor afterwards, not taken from either side's word. Unity 6000.3.9f1, Pipeline 0.10.0-exp.1, Windows 11, 3 rounds:
+[`bench/live.py`](bench/live.py) runs one write against a real, open Editor in four states, two ways: a naive agent that sends the plain `unity command` and trusts `success`, and `playcal loop run` with a read-back check. "Landed" is read back from the Editor afterwards, not taken from either side's word. Unity 6000.3.9f1, Unity CLI 1.0.0, Pipeline 1.0.1, Windows 11, 3 rounds, 2026-11-22:
 
 | Editor state | naive landed | playcal landed | false successes (either) | median time naive / playcal |
 |---|---|---|---|---|
-| idle | 3/3 | 3/3 | 0 | 2.2 s / 7.4 s |
-| mid domain reload | **0/3** | **3/3** | 0 | 2.2 s / 33.6 s (19–41 s, the reload itself) |
-| in Play Mode (write refused) | 0/3 | 0/3 | 0 | 3.9 s / 28.0 s |
-| bad value (string into a float) | 0/3 | 0/3 | 0 | 4.3 s / 5.4 s |
+| idle | 3/3 | 3/3 | 0 | 1.2 s / 3.6 s |
+| mid domain reload | **0/3** | **3/3** | 0 | 1.2 s / 12.6 s (11.5–13.3 s, the reload itself) |
+| in Play Mode (write refused) | 0/3 | 0/3 | 0 | 1.2 s / 1.2 s |
+| bad value (string into a float) | 0/3 | 0/3 | 0 | 1.7 s / 3.6 s |
 
 What this says, plainly:
 
-- A write sent while Unity reloads is dropped by the plain CLI and lands through playcal. The reload window was really hit in 6 of 6 runs.
-- Unity's CLI is stricter than I expected. It refused Play Mode writes and bad values loudly, so neither side reported a single false success here. playcal's digest does add which kind of failure it was (`fault: task` for both of those), so an agent knows not to just retry.
-- playcal is still about 3x slower than a bare call on a quiet Editor. Every `unity` call costs about 3 s, and part of that is the CLI sending usage analytics on `status`. Each ready check is one `editor status` call, with the read-back in the same batch, so a quiet write is 3 calls instead of the 6 it started at: the idle case went from 24 s to 15 s to 7 s ([#4](https://github.com/RizgarOzan/playcal/issues/4)). The mid-reload time is mostly the reload itself; it took 10 to 24 s on this run before the Pipeline server even went away, and 14 s on a quieter one.
-- The refused and bad-value cases take as long as the Editor takes to say no. Play Mode held the write for about 25 s before refusing it; the bad value came back in 5 s.
-- Reading the names of a few objects: the full `scene get_hierarchy` was 5216 bytes, `playcal query` 682. The test scene is tiny; the gap grows with the scene.
+- A write sent while Unity reloads is dropped by the plain CLI ("No Pipeline instance found") and lands through playcal. The reload window was really hit in 3 of 3 runs.
+- Unity's CLI refuses Play Mode writes and bad values loudly, so neither side reported a single false success. playcal's digest adds which kind of failure it was (`fault: task` for both), so an agent knows not to just retry.
+- On a quiet Editor playcal costs about 2.4 s more than a bare call: three `unity` calls (ready check, write, read-back batch) at about 1.2 s each on CLI 1.0, down from about 3 s each on the 1.0 betas. The idle case went from 24 s to 15 s to 7.4 s to 3.6 s ([#4](https://github.com/RizgarOzan/playcal/issues/4)). It is still not under the 1 s I'd like; that would need the ready check, the write and the read-back in one `job batch`, and a batch can't wait out a reload, so it would only help when the Editor is already quiet.
+- Play Mode used to take playcal 28 s of its own waiting (on Pipeline 0.10). Now `loop run` reads `playMode` from its first `editor status` call and stops with reason `play_mode` (exit 4, `fault: task`) and a hint to stop Play Mode, as fast as the plain call. `editor.playmode` commands themselves still go through.
+- CLI 1.0 changed its output: `unity command` results come back bare, without the `{success, data}` envelope, and command errors only on stderr. playcal 0.2.2 reads every command on the new CLI as failed; the next release reads both shapes.
+- Reading the names of a few objects: the full `scene get_hierarchy` was 5959 bytes, `playcal query` 1304. The test scene is tiny; the gap grows with the scene.
 
 Not measured yet: an MCP server as a third arm, agent token use over a whole task, and the unfocused-Editor and modal-dialog cases on a live Editor. [`bench/sim.py`](bench/sim.py) replays those against a scripted Editor in CI, plus a write that lands but makes the game throw once Play starts (`loop` alone calls that a success; `observe` catches it). It's a regression guard, not evidence about Unity.
 

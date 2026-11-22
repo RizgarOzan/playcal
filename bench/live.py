@@ -25,7 +25,7 @@ import sys
 import time
 from pathlib import Path
 
-from playcal import loop
+from playcal import checks, loop
 
 RUN = loop.unity_runner
 
@@ -42,7 +42,8 @@ def gone(project) -> bool:
 def exists(project, name) -> bool:
     loop.settle(RUN, project, 180)
     r = cmd(project, "gameobject", "find", "--name", name)
-    return bool(r["success"] and (r["data"] or {}).get("result", {}).get("count"))
+    # CLI 1.0 returns the matches bare (one object or a list); older ones {gameObjects, count}
+    return r["success"] and f"/{name}" in checks.lookup(r["data"], "result.**.hierarchyPath")
 
 
 def touch_script(project) -> Path:
@@ -100,7 +101,7 @@ def naive(project, write, name):
 def playcal(project, write, name):
     out = loop.run_command(RUN, write[0], write[1:], project=project, timeout=180,
                            verify=["gameobject", "find", "--name", name],
-                           expect=[f"result.gameObjects.*.hierarchyPath=/{name}"])
+                           expect=[f"result.**.hierarchyPath=/{name}"])
     said = out["reason"] if not out.get("fault") else f"{out['reason']}/{out['fault']}"
     return {"reported_ok": out["ok"], "said": said}
 

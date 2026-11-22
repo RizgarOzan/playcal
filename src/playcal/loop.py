@@ -41,7 +41,8 @@ from .registry import Module
 Runner = Callable[[list[str]], "tuple[int, dict]"]
 
 EXIT = {"ready": 0, "command_failed": 1, "ambiguous": 2, "timeout": 3, "no_editor": 3, "safe_mode": 4,
-        "verify_failed": 5, "editor_blocked": 4, "compile_error": 6, "compile_check_failed": 3}
+        "verify_failed": 5, "editor_blocked": 4, "compile_error": 6, "compile_check_failed": 3,
+        "play_mode": 4}
 INFRA = {"ambiguous", "timeout", "no_editor", "safe_mode", "editor_blocked", "compile_check_failed"}
 
 
@@ -56,10 +57,25 @@ def unity_runner(args: list[str], timeout: float = 120) -> tuple[int, dict]:
         return 127, {"success": False, "errors": [{"code": "UNITY_CLI_MISSING", "message": f"{exe} not on PATH"}]}
     except subprocess.TimeoutExpired:
         return 124, {"success": False, "errors": [{"code": "UNITY_CLI_TIMEOUT", "message": f"{args[0]} took over {timeout}s"}]}
+    return p.returncode, _envelope(p.returncode, p.stdout, p.stderr)
+
+
+def _envelope(rc: int, out: str, err: str) -> dict:
+    """CLI 1.0 prints `unity command` results bare (no success/data envelope), one JSON value or one per
+    line, nothing at all for an empty result, and errors only on stderr. Older CLIs, and `unity status`,
+    print the envelope. Both come out as the envelope so the rest of playcal reads one shape."""
     try:
-        return p.returncode, json.loads(p.stdout)
+        parsed = json.loads(out) if out.strip() else None
     except json.JSONDecodeError:
-        return p.returncode, {"success": False, "errors": [{"code": "UNITY_CLI_BAD_JSON", "message": p.stdout[-500:] or p.stderr[-500:]}]}
+        try:
+            parsed = [json.loads(ln) for ln in out.splitlines() if ln.strip()]
+        except json.JSONDecodeError:
+            return {"success": False, "errors": [{"code": "UNITY_CLI_BAD_JSON", "message": out[-500:] or err[-500:]}]}
+    if isinstance(parsed, dict) and "success" in parsed and ("data" in parsed or "errors" in parsed):
+        return parsed
+    if rc != 0:
+        return {"success": False, "errors": [{"code": f"COMMAND_FAILED_{rc}", "message": err.strip()[-500:] or out[-500:]}]}
+    return {"success": True, "data": {"result": parsed}}
 
 
 def _norm(path: str) -> str:
@@ -133,6 +149,8 @@ def _settled(reason: str, project, state, seen, waited: float) -> dict:
         "timeout": "Editor never stayed ready. It may be compiling, importing, or blocked by a modal dialog.",
         "editor_blocked": "Unity is running but not answering, usually a dialog such as the Safe Mode prompt after "
                           "compile errors. Run `playcal logs` for the first error; a person has to answer the dialog.",
+        "play_mode": "The Editor is in Play Mode, where Unity refuses edit-time writes. Stop it first: "
+                     "`playcal loop run editor.playmode -- stop`.",
     }
     out = {"settled": reason == "ready", "reason": reason, "project": project, "state": state,
            "states_seen": seen, "waited_ms": round(waited * 1000)}
@@ -243,14 +261,20 @@ def _state(data):
     return {"result": data["result"]} if isinstance(data, dict) and "result" in data else data
 
 
-def _idle_read(runner: Runner, project: str | None, verify: list[str] | None) -> tuple[dict, dict | None] | None:
+def _idle_read(runner: Runner, project: str | None, verify: list[str] | None,
+               refuse_play: bool = False) -> tuple[dict, dict | None] | None:
     """One `editor status` call, with a read in the same batch when one is wanted, instead of two
     `unity status` polls and a separate read. Used before the write (the read is the --diff snapshot)
     and after a write that starts no reload (the read is --verify). Counts only when the Editor itself
-    says it is ready, not compiling and not reloading; None sends the caller back to settle."""
+    says it is ready, not compiling and not reloading; None sends the caller back to settle.
+    refuse_play: an Editor in Play Mode comes back as an unsettled play_mode at once, instead of
+    settling twice around a write Unity will refuse anyway (28 s on a live Editor)."""
     t0 = time.monotonic()
     res = _reads(runner, project, [["editor", "status"], *([verify] if verify else [])])
     st = ((res[0]["data"] or {}).get("result") or {}) if res[0]["success"] else {}
+    if refuse_play and st.get("playMode") in ("playing", "paused") and st.get("compiling") is False             and st.get("domainReloadInProgress") is False:
+        return _settled("play_mode", project or st.get("projectPath"), "play_mode", ["play_mode"],
+                        time.monotonic() - t0), None
     if st.get("status") != "ready" or st.get("compiling") is not False or st.get("domainReloadInProgress") is not False:
         return None
     after = {"settled": True, "reason": "ready", "project": project or st.get("projectPath"), "state": "ready",
@@ -265,7 +289,8 @@ def run_command(runner: Runner, name: str, params: list[str], project: str | Non
                 **settle_kw) -> dict:
     t0 = time.monotonic()
     digest: dict = {"command": name, "params": params}
-    quick = _idle_read(runner, project, verify if verify and want_diff else None)
+    quick = _idle_read(runner, project, verify if verify and want_diff else None,
+                       refuse_play=not name.startswith("editor.playmode"))
     if quick:
         digest["before"], snapshot = quick
     else:
@@ -273,6 +298,8 @@ def run_command(runner: Runner, name: str, params: list[str], project: str | Non
     if not digest["before"]["settled"]:
         digest["ok"], digest["reason"] = False, digest["before"]["reason"]
         digest["fault"] = _fault(digest["reason"], None)
+        if "hint" in digest["before"]:
+            digest["hint"] = digest["before"]["hint"]
         return digest
     if checkpoint is not None:
         digest["checkpoint"] = _save_checkpoint(checkpoint, f"before {name} {' '.join(params)}".strip())

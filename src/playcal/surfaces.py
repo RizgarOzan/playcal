@@ -17,6 +17,8 @@ from .registry import Module, load_modules
 
 SKIP = {"help", "json"}
 PROTOCOL = "2025-06-18"
+# served by default; every tool schema costs the agent context on each turn, so the rest wait for `mcp --all`
+CORE = ("doctor", "loop", "logs", "observe", "checkpoint", "meta", "query", "ingest", "report", "calibrate")
 
 
 def _parser(mod: Module) -> argparse.ArgumentParser:
@@ -107,7 +109,9 @@ def handle(msg: dict, mods: dict[str, Module]) -> dict | None:
     if method == "initialize":
         result = {"protocolVersion": msg.get("params", {}).get("protocolVersion", PROTOCOL),
                   "capabilities": {"tools": {}}, "serverInfo": {"name": "playcal", "version": __version__},
-                  "instructions": "playcal tools, which when (`playcal X` below is the tool playcal_X):\n" + "\n".join(GUIDE)}
+                  "instructions": "playcal tools, which when (`playcal X` below is the tool playcal_X):\n" + "\n".join(GUIDE)
+                  + ("" if len(mods) > len(CORE) else "\n- A command with no playcal_X tool here (visual, playtest, replay, ...): "
+                     "run `playcal X --json` in a shell, or restart the server as `playcal mcp --all`.")}
     elif method == "ping":
         result = {}
     elif method == "tools/list":
@@ -124,10 +128,10 @@ def handle(msg: dict, mods: dict[str, Module]) -> dict | None:
     return {"jsonrpc": "2.0", "id": mid, "result": result}
 
 
-def serve(stdin=None, stdout=None) -> int:
-    """MCP over stdio: one JSON-RPC message per line."""
+def serve(stdin=None, stdout=None, all_tools: bool = False) -> int:
+    """MCP over stdio: one JSON-RPC message per line. Only the CORE modules unless all_tools."""
     stdin, stdout = stdin or sys.stdin, stdout or sys.stdout
-    mods = {m.name: m for m in load_modules()}
+    mods = {m.name: m for m in load_modules() if all_tools or m.name in CORE}
     for line in stdin:
         if not line.strip():
             continue

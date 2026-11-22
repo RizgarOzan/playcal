@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import random
 import statistics
 import sys
 from pathlib import Path
@@ -79,19 +80,96 @@ def predict(model: dict, x: float, extra_var: float = 0.0) -> tuple[float, float
     return expit(eta), expit(eta - t * se), expit(eta + t * se)
 
 
-def leave_one_out(points) -> dict | None:
+def _loo_predictions(points) -> list[tuple[float, float, float]] | None:
+    """Each level predicted from a fit on all the others: (p, lo, hi), or None when that can't be done."""
     if len(points) < 4:
         return None
-    hits, errs = 0, []
-    for i, (x, y, v) in enumerate(points):
+    out = []
+    for i, (x, _, v) in enumerate(points):
         try:
             m = fit(points[:i] + points[i + 1:])
         except ValueError:
             return None
-        p, lo, hi = predict(m, x, extra_var=v)
-        hits += lo <= expit(y) <= hi
-        errs.append(abs(p - expit(y)))
+        out.append(predict(m, x, extra_var=v))
+    return out
+
+
+def leave_one_out(points) -> dict | None:
+    preds = _loo_predictions(points)
+    if preds is None:
+        return None
+    hits = sum(lo <= expit(y) <= hi for (_, lo, hi), (_, y, _) in zip(preds, points))
+    errs = [abs(p - expit(y)) for (p, _, _), (_, y, _) in zip(preds, points)]
     return {"levels": len(points), "inside_interval": hits, "median_abs_error": round(statistics.median(errs), 4)}
+
+
+def _ranks(xs):
+    order = sorted(range(len(xs)), key=lambda i: xs[i])
+    r = [0.0] * len(xs)
+    i = 0
+    while i < len(order):
+        j = i
+        while j + 1 < len(order) and xs[order[j + 1]] == xs[order[i]]:
+            j += 1
+        for k in range(i, j + 1):
+            r[order[k]] = (i + j) / 2
+        i = j + 1
+    return r
+
+
+def spearman(xs, ys) -> float | None:
+    rx, ry = _ranks(xs), _ranks(ys)
+    mx, my = statistics.fmean(rx), statistics.fmean(ry)
+    sxy = sum((a - mx) * (b - my) for a, b in zip(rx, ry))
+    sxx, syy = sum((a - mx) ** 2 for a in rx), sum((b - my) ** 2 for b in ry)
+    return sxy / math.sqrt(sxx * syy) if sxx and syy else None
+
+
+def _scores(pred, seen) -> dict:
+    """Spearman and mean absolute error, with 95% bootstrap intervals over levels (fixed seed)."""
+    rho, mae = spearman(pred, seen), statistics.fmean(abs(p - s) for p, s in zip(pred, seen))
+    rnd, rhos, maes = random.Random(0), [], []
+    for _ in range(2000):
+        idx = [rnd.randrange(len(pred)) for _ in pred]
+        r = spearman([pred[i] for i in idx], [seen[i] for i in idx])
+        if r is not None:
+            rhos.append(r)
+        maes.append(statistics.fmean(abs(pred[i] - seen[i]) for i in idx))
+
+    def ci(v):
+        v = sorted(v)
+        return [round(v[int(0.025 * len(v))], 4), round(v[int(0.975 * len(v)) - 1], 4)] if v else None
+
+    return {"spearman": None if rho is None else round(rho, 4), "spearman_ci": ci(rhos),
+            "mae": round(mae, 4), "mae_ci": ci(maes)}
+
+
+def validate(points, seen: list[float]) -> dict | None:
+    """Leave-one-out check of the bot model against a baseline that knows only the level order.
+    seen: each calibration level's observed human pass rate, in the same order as points."""
+    preds = _loo_predictions(points)
+    base = _loo_predictions([(i, y, v) for i, (_, y, v) in enumerate(points)])
+    if preds is None or base is None:
+        return None
+    return {"levels": len(points), "model": _scores([p for p, _, _ in preds], seen),
+            "baseline_level_order": _scores([p for p, _, _ in base], seen)}
+
+
+def check_prereg(val: dict | None, prereg: dict) -> list[str]:
+    """Why the preregistered thresholds fail; empty means they pass. Keys, all optional:
+    min_levels, spearman_min, mae_max (a fraction: 0.10 = 10 points), beat_baseline."""
+    if val is None:
+        return ["validation needs at least 4 calibration levels"]
+    m, b, why = val["model"], val["baseline_level_order"], []
+    if val["levels"] < prereg.get("min_levels", 0):
+        why.append(f"{val['levels']} calibration levels, preregistered minimum {prereg['min_levels']}")
+    if "spearman_min" in prereg and (m["spearman"] is None or m["spearman"] < prereg["spearman_min"]):
+        why.append(f"spearman {m['spearman']} below {prereg['spearman_min']}")
+    if "mae_max" in prereg and m["mae"] > prereg["mae_max"]:
+        why.append(f"mean abs error {m['mae']} above {prereg['mae_max']}")
+    if prereg.get("beat_baseline") and m["mae"] >= b["mae"]:
+        why.append(f"mean abs error {m['mae']} does not beat the level-order baseline {b['mae']}")
+    return why
 
 
 def _stats(files: list[str]) -> dict:
@@ -104,7 +182,7 @@ def _stats(files: list[str]) -> dict:
 
 
 def calibrate(human: dict, bot: dict, min_attempts: int = 5) -> dict:
-    points, keys = [], []
+    points, keys, seen = [], [], []
     for key in sorted(bot, key=_level_sort_key):
         h, b = human.get(key), bot[key]
         if h and h.attempts >= min_attempts and b.attempts:
@@ -112,6 +190,7 @@ def calibrate(human: dict, bot: dict, min_attempts: int = 5) -> dict:
             y, v = logit(h.attempts_passed, h.attempts)
             points.append((x, y, v))
             keys.append(key)
+            seen.append(h.attempts_passed / h.attempts)
     model = fit(points)
     levels = []
     for key in sorted(bot, key=_level_sort_key):
@@ -128,7 +207,7 @@ def calibrate(human: dict, bot: dict, min_attempts: int = 5) -> dict:
         levels.append(row)
     return {"model": {"a": round(model["a"], 4), "b": round(model["b"], 4), "tau": round(math.sqrt(model["tau2"]), 4),
                       "calibration_levels": len(points)},
-            "leave_one_out": leave_one_out(points), "levels": levels}
+            "leave_one_out": leave_one_out(points), "validation": validate(points, seen), "levels": levels}
 
 
 def _add_args(p: argparse.ArgumentParser) -> None:
@@ -136,6 +215,8 @@ def _add_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--bot", nargs="+", required=True, help="event JSONL from bot runs, same schema")
     p.add_argument("--min-attempts", type=int, default=5, help="human attempts a level needs to count for calibration (default 5)")
     p.add_argument("--targets", metavar="FILE", help='JSON {"4": [40, 60]}: predicted human pass-rate band per level; a level outside its band exits 1')
+    p.add_argument("--prereg", metavar="FILE", help='JSON thresholds written before looking at the data, e.g. '
+                   '{"min_levels": 15, "spearman_min": 0.6, "mae_max": 0.10, "beat_baseline": true}; a miss exits 1')
     p.add_argument("--json", action="store_true", help="print JSON instead of a table")
 
 
@@ -147,13 +228,17 @@ def _run(args: argparse.Namespace) -> int:
     try:
         out = calibrate(_stats(args.human), _stats(args.bot), args.min_attempts)
         targets = load_targets(args.targets) if getattr(args, "targets", None) else {}
+        prereg = json.loads(Path(args.prereg).read_text(encoding="utf-8")) if getattr(args, "prereg", None) else None
     except (OSError, ValueError, TypeError) as e:
         print(json.dumps({"error": str(e)}) if args.json else f"playcal calibrate: {e}", file=None if args.json else sys.stderr)
         return 2
     misses = check_targets(((r["game_version"], r["level"], r["predicted"]) for r in out["levels"]), targets, "predicted")
-    code = 1 if misses else 0
+    failed = check_prereg(out["validation"], prereg) if prereg is not None else []
+    code = 1 if misses or failed else 0
     if targets:
         out["targets_missed"] = misses
+    if prereg is not None:
+        out["prereg"] = {"thresholds": prereg, "passed": not failed, "failed": failed}
     if args.json:
         print(json.dumps(out, ensure_ascii=False))
         return code
@@ -170,6 +255,13 @@ def _run(args: argparse.Namespace) -> int:
               f"median error {100 * loo['median_abs_error']:.0f} points.")
     else:
         print("leave-one-out needs at least 4 calibration levels; treat these numbers as a rough guess.")
+    val = out["validation"]
+    for name, sc in ((("bot model", val["model"]), ("level-order baseline", val["baseline_level_order"])) if val else ()):
+        rho = "n/a" if sc["spearman"] is None else f"{sc['spearman']:.2f} [{sc['spearman_ci'][0]:.2f}, {sc['spearman_ci'][1]:.2f}]"
+        print(f"{name}: spearman {rho}, mean error {100 * sc['mae']:.1f} points "
+              f"[{100 * sc['mae_ci'][0]:.1f}, {100 * sc['mae_ci'][1]:.1f}] (leave-one-out, 95% bootstrap)")
+    if prereg is not None:
+        print("preregistered thresholds: " + ("PASS" if not failed else "FAIL: " + "; ".join(failed)))
     for miss in misses:
         print(miss["message"])
     return code

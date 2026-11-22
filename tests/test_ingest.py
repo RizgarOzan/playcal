@@ -70,3 +70,68 @@ def test_modules_listed_from_registry(capsys):
     assert main(["modules", "--json"]) == 0
     names = [m["name"] for m in json.loads(capsys.readouterr().out)]
     assert "ingest" in names
+
+
+# Export rows shaped after the documented fields (neither doc page has a sample row); see playcal/convert.py.
+def _ga(user, ts, event_id, **extra):
+    return json.dumps({"arrival_ts": ts + 5, "game_id": 1234, "data": {
+        "user_id": user, "session_id": "a1b2c3d4-0000-4000-8000-000000000001", "session_num": 1,
+        "client_ts": ts, "category": "progression", "event_id": event_id, **extra}})
+
+
+def _fb(user, ts_s, name, level, success=None, session=1700000000):
+    params = [{"key": "level_name", "value": {"string_value": level}},
+              {"key": "ga_session_id", "value": {"int_value": session}}]
+    if success is not None:
+        params.append({"key": "success", "value": {"int_value": int(success)}})
+    return json.dumps({"event_date": "20261122", "event_timestamp": int(ts_s * 1e6), "event_name": name,
+                       "user_pseudo_id": user, "event_params": params, "app_info": {"id": "com.x.game", "version": "1.4"}})
+
+
+def test_gameanalytics_progression_becomes_events_with_counted_attempts():
+    from playcal.convert import convert
+    rows = [_ga("u1", 1000, "Start:World1:Level3"), _ga("u1", 1030, "Fail:World1:Level3", score=40),
+            _ga("u1", 1040, "Start:World1:Level3"), _ga("u1", 1090, "Complete:World1:Level3"),
+            json.dumps({"arrival_ts": 1, "data": {"category": "business", "user_id": "u1"}}),  # not a level event
+            _ga("u1", 1100, "Restart:World1:Level3")]
+    res = check_lines(convert([("ga.json", r) for r in rows], "gameanalytics"))
+    assert [(e["type"], e["attempt"]) for e in res.accepted] == [
+        ("level_start", 1), ("level_fail", 1), ("level_start", 2), ("level_complete", 2)]
+    first = res.accepted[0]
+    assert first["level"] == "World1:Level3" and first["game"] == "1234" and first["ts"] == "1970-01-01T00:16:40.000Z"
+    assert res.accepted[1]["props"] == {"score": 40}
+    assert len(res.rejected) == 1 and "Restart" in res.rejected[0]["reason"]
+
+
+def test_gameanalytics_attempt_num_wins_over_the_count():
+    from playcal.convert import convert
+    res = check_lines(convert([("ga", _ga("u1", 5, "Fail:L1", attempt_num=4))], "gameanalytics"))
+    assert res.accepted[0]["attempt"] == 4
+
+
+def test_firebase_level_end_success_maps_to_complete_or_fail_out_of_order():
+    from playcal.convert import convert
+    rows = [_fb("123.456", 20, "level_end", "L1", success=True), _fb("123.456", 10, "level_end", "L1", success=False),
+            _fb("123.456", 0, "level_start", "L1"), _fb("123.456", 15, "level_start", "L1"),
+            _fb("123.456", 30, "screen_view", "L1"), _fb("123.456", 40, "level_end", "L1")]
+    res = check_lines(convert([("fb.json", r) for r in rows], "firebase"))
+    assert [(e["type"], e["attempt"]) for e in res.accepted] == [
+        ("level_start", 1), ("level_fail", 1), ("level_start", 2), ("level_complete", 2)]
+    e = res.accepted[0]
+    assert (e["game"], e["game_version"]) == ("com.x.game", "1.4")
+    assert "." not in e["install_id"] and e["install_id"] == res.accepted[3]["install_id"]
+    assert len(res.rejected) == 1 and "success" in res.rejected[0]["reason"]
+
+
+def test_ingest_from_cli_feeds_report(tmp_path, capsys):
+    src = tmp_path / "fb.jsonl"
+    src.write_text("\n".join([_fb("p1", 0, "level_start", "L1"), _fb("p1", 9, "level_end", "L1", success=True),
+                              _fb("p2", 0, "level_start", "L1"), _fb("p2", 9, "level_end", "L1", success=False)]),
+                   encoding="utf-8")
+    out = tmp_path / "ok.jsonl"
+    assert main(["ingest", str(src), "--from", "firebase", "--game-version", "2.0", "--out", str(out),
+                 "--rejected", str(tmp_path / "bad.jsonl"), "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["accepted"] == 4
+    assert all(json.loads(l)["game_version"] == "2.0" for l in out.read_text(encoding="utf-8").splitlines())
+    assert main(["report", str(out), "--json"]) == 0
+    assert "L1" in capsys.readouterr().out

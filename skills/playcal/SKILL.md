@@ -58,6 +58,7 @@ predict each level's human pass rate from bot runs, calibrated on a small human 
 - `--bot`: event JSONL from bot runs, same schema
 - `--min-attempts`: human attempts a level needs to count for calibration (default 5)
 - `--targets`: JSON {"4": [40, 60]}: predicted human pass-rate band per level; a level outside its band exits 1
+- `--prereg`: JSON thresholds written before looking at the data, e.g. {"min_levels": 15, "spearman_min": 0.6, "mae_max": 0.10, "beat_baseline": true}; a miss exits 1
 
 ## playcal checkpoint
 
@@ -80,6 +81,9 @@ validate gameplay events (JSONL or pasted PC0 blobs) against the event schema.
 
 - `files`: JSONL files, or '-' for stdin
 - `--paste`: inputs are free text containing PC0: blobs
+- `--from`: inputs are an analytics export (one JSON row per line); level events become playcal events
+- `--game`: with --from: game name to use instead of the one in the export
+- `--game-version`: with --from: game version (the exports often lack one; default: unknown)
 - `--out`: where valid events go (default: accepted.jsonl)
 - `--rejected`: where invalid lines go, with a reason
 

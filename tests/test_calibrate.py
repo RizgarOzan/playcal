@@ -138,3 +138,50 @@ def test_targets_exit_1_with_the_level(tmp_path, capsys):
     assert [m["level"] for m in miss] == ["04"] and miss[0]["pass rate"] == 0.05
     t.write_text(json.dumps({"04": [0, 0.6]}), encoding="utf-8")
     assert main(["report", h, "--targets", str(t)]) == 0
+
+
+def test_spearman_handles_ties_and_constants():
+    from playcal.calibrate import spearman
+    assert spearman([1, 2, 3, 4], [10, 20, 30, 40]) == pytest.approx(1)
+    assert spearman([1, 2, 3, 4], [4, 3, 2, 1]) == pytest.approx(-1)
+    assert spearman([1, 1, 2, 3], [1, 1, 2, 3]) == pytest.approx(1)
+    assert spearman([1, 2, 3], [5, 5, 5]) is None
+
+
+# difficulty does not follow level order here, so the level number alone should predict badly
+SHUFFLED = {"01": (40, 8), "02": (40, 36), "03": (40, 16), "04": (40, 30), "05": (40, 4), "06": (40, 24), "07": (40, 12),
+            "08": (40, 34)}
+
+
+def _shuffled_files(tmp_path):
+    b, h, start = [], [], 0
+    for lv, (n, k) in SHUFFLED.items():
+        b += events(lv, n, k, start)
+        h += events(lv, 30, max(0, round(k * 30 / n) - 3), start + n)
+        start += n + 30
+    return write(tmp_path / "bot.jsonl", b), write(tmp_path / "human.jsonl", h)
+
+
+def test_validation_beats_the_level_order_baseline(tmp_path):
+    from playcal.calibrate import _stats
+    bf, hf = _shuffled_files(tmp_path)
+    val = calibrate(_stats([hf]), _stats([bf]))["validation"]
+    m, base = val["model"], val["baseline_level_order"]
+    assert val["levels"] == 8
+    assert m["spearman"] > 0.9 and m["mae"] < 0.08
+    assert m["mae"] < base["mae"] and base["spearman"] < m["spearman"]
+    lo, hi = m["mae_ci"]
+    assert lo <= m["mae"] <= hi
+
+
+def test_prereg_pass_and_fail_exit_codes(tmp_path, capsys):
+    bf, hf = _shuffled_files(tmp_path)
+    pre = tmp_path / "prereg.json"
+    pre.write_text(json.dumps({"spearman_min": 0.6, "mae_max": 0.10, "beat_baseline": True}), encoding="utf-8")
+    assert main(["calibrate", "--human", hf, "--bot", bf, "--prereg", str(pre)]) == 0
+    text = capsys.readouterr().out
+    assert "preregistered thresholds: PASS" in text and "level-order baseline: spearman" in text
+    pre.write_text(json.dumps({"min_levels": 15, "mae_max": 0.10}), encoding="utf-8")
+    assert main(["calibrate", "--human", hf, "--bot", bf, "--prereg", str(pre), "--json"]) == 1
+    out = json.loads(capsys.readouterr().out)
+    assert out["prereg"]["passed"] is False and "minimum 15" in out["prereg"]["failed"][0]

@@ -128,8 +128,8 @@ def scene(*names):
                                          "result": {"objects": [{"name": n} for n in names]}}}
 
 
-def editor(status="ready", compiling=False, reloading=False):
-    return 0, {"success": True, "data": {"result": {"status": status, "compiling": compiling,
+def editor(status="ready", compiling=False, reloading=False, play="stopped"):
+    return 0, {"success": True, "data": {"result": {"status": status, "compiling": compiling, "playMode": play,
                                                     "domainReloadInProgress": reloading, "codeLoadCount": 46}}}
 
 
@@ -255,3 +255,37 @@ def test_checkpoint_before_write_and_undo_hint_on_failure(tmp_path):
 def test_checkpoint_outside_git_does_not_block_the_command(tmp_path):
     out = loop.run_command(Fake([status("ready")]), "x", [], checkpoint=str(tmp_path / "nowhere"), **fast())
     assert out["ok"] and "error" in out["checkpoint"] and "undo" not in out
+
+
+def test_play_mode_refuses_the_write_after_one_editor_status_call():
+    for play, state in (("playing", "playing"), ("paused", "ready")):
+        fake = Fake([status("ready")], command={"create": (0, {"success": True, "data": {}}),
+                                                "editor": editor(status=state, play=play)})
+        out = loop.run_command(fake, "create", ["--name", "Probe"], **fast())
+        assert out["reason"] == "play_mode" and out["fault"] == "task" and "editor.playmode" in out["hint"]
+        assert len(fake.calls) == 1 and fake.calls[0][:3] == ["command", "editor", "status"]  # no settle, no write
+        assert loop.EXIT["play_mode"] == 4
+
+
+def test_play_mode_commands_still_run_in_play_mode():
+    fake = Fake([status("ready")], command={"editor.playmode": (0, {"success": True, "data": {}}),
+                                            "editor": editor(play="playing")})
+    out = loop.run_command(fake, "editor.playmode", ["stop"], **fast())
+    assert out["ok"] and ["command", "editor.playmode", "stop"] == fake.calls[1][:3]
+
+
+def test_envelope_reads_cli_1_0_bare_output_as_the_old_envelope():
+    # CLI 1.0 prints `unity command` results bare; errors go to stderr only
+    one = '{"hierarchyPath": "/Probe", "type": "GameObject"}'
+    assert loop._envelope(0, one, "") == {"success": True, "data": {"result": json.loads(one)}}
+    assert loop._envelope(0, "", "")["data"] == {"result": None}
+    assert loop._envelope(0, '{"a": 1}\n{"a": 2}\n', "")["data"]["result"] == [{"a": 1}, {"a": 2}]
+    bad = loop._envelope(6, "", "error: Command 'component set_field' failed: Input string was not in a correct format.\n")
+    assert bad["success"] is False and bad["errors"][0]["code"] == "COMMAND_FAILED_6"
+    assert loop._fault("command_failed", bad) == "task"  # a bad value is the agent's fault, not the Editor's
+
+
+def test_envelope_passes_the_old_envelope_through():
+    old = {"success": False, "command": "command", "data": None, "errors": [{"code": "EDITOR_NOT_RUNNING", "message": "x"}]}
+    assert loop._envelope(1, json.dumps(old), "") == old
+    assert loop._envelope(0, "not json", "")["errors"][0]["code"] == "UNITY_CLI_BAD_JSON"
