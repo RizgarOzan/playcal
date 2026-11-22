@@ -1,12 +1,15 @@
 """playcal ui: draw the run history (.playcal/history.jsonl) as one static HTML page, newest run first.
 One row per loop, observe, replay or visual run: what ran, the verdict, the errors with file:line,
 failed checks, the scene diff, the checkpoint to undo to, and the screenshot or visual diff image.
-No server and no scripts: open the file in any browser."""
+No server and no scripts: open the file in any browser.
+`--summary` prints counts instead (runs per tool, exit codes, verdicts), with no commands, paths or
+output, so a user can read it and paste it into an issue."""
 from __future__ import annotations
 
 import argparse
 import html
 import os
+import re
 import sys
 import time
 import webbrowser
@@ -97,11 +100,38 @@ def render(entries: list[dict], page_dir: Path) -> str:
             f'{body}</main></body></html>')
 
 
+def summary(entries: list[dict]) -> str:
+    """Counts only. Verdicts are kept when they look like a fixed code (ready, play_mode, ...);
+    anything else, like a message or a path, is counted as "other"."""
+    lines = ["playcal usage summary (counts only: no commands, paths or output)"]
+    if not entries:
+        return "\n".join(lines + ["0 runs"])
+    days = sorted({time.strftime("%Y-%m-%d", time.localtime(e.get("t", 0))) for e in entries})
+    lines.append(f"{days[0]} to {days[-1]}, {len(days)} active days, {len(entries)} runs")
+    groups: dict[str, list[dict]] = {}
+    for e in entries:
+        groups.setdefault(f"{e.get('tool', '?')} {e.get('action', '')}".strip(), []).append(e)
+    for name, runs in sorted(groups.items(), key=lambda kv: -len(kv[1])):
+        codes: dict[str, int] = {}
+        verdicts: dict[str, int] = {}
+        for e in runs:
+            codes[str(e.get("exit"))] = codes.get(str(e.get("exit")), 0) + 1
+            v = _verdict(e)
+            v = v if re.fullmatch(r"[a-z_]{1,40}", v) else "other"
+            verdicts[v] = verdicts.get(v, 0) + 1
+        exits = ", ".join(f"exit {c}: {n}" for c, n in sorted(codes.items()))
+        lines.append(f"{name}: {len(runs)} runs ({exits})")
+        lines.append("  " + ", ".join(f"{v} {n}" for v, n in sorted(verdicts.items(), key=lambda kv: -kv[1])))
+    return "\n".join(lines)
+
+
 def _add_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--history", help=f"history file (default: $PLAYCAL_HISTORY or {history.DEFAULT})")
     p.add_argument("--out", default=".playcal/ui.html", help="where to write the page (default .playcal/ui.html)")
     p.add_argument("--last", type=int, metavar="N", help="only the newest N runs")
     p.add_argument("--open", action="store_true", help="open the page in the default browser")
+    p.add_argument("--summary", action="store_true",
+                   help="print counts only (no commands, paths or output) instead of writing the page")
 
 
 def _run(args: argparse.Namespace) -> int:
@@ -112,6 +142,9 @@ def _run(args: argparse.Namespace) -> int:
     entries = sorted(history.read(src), key=lambda x: x.get("t", 0))
     if args.last:
         entries = entries[-args.last:]
+    if args.summary:
+        print(summary(entries))
+        return 0
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(render(entries, out.parent), encoding="utf-8")

@@ -1,0 +1,46 @@
+name: Try playcal for two weeks
+description: Sign up to use playcal on your own Unity project and tell me how it went
+labels: ["trial"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for trying it. I only need a few lines now, and one short note after two weeks.
+        Nothing here is sent anywhere automatically. playcal keeps its run history on your machine.
+  - type: input
+    id: unity
+    attributes:
+      label: Unity version
+      placeholder: "6000.2.6f2"
+    validations:
+      required: true
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Which coding agent do you use with Unity?
+      options:
+        - Claude Code
+        - Cursor
+        - Codex
+        - Other (say which below)
+    validations:
+      required: true
+  - type: textarea
+    id: work
+    attributes:
+      label: What do you mostly ask it to do in Unity?
+      description: Gameplay scripts, scene or prefab edits, UI, tests, anything else.
+    validations:
+      required: true
+  - type: dropdown
+    id: summary
+    attributes:
+      label: After two weeks, are you OK pasting a usage summary here?
+      description: >
+        `playcal ui --summary` prints counts only: how many runs, exit codes and verdicts like
+        `ready` or `play_mode`. It leaves out commands, file paths and output. Run it and read it before you paste.
+      options:
+        - "Yes"
+        - "No"
+    validations:
+      required: true

@@ -241,6 +241,7 @@ draw the run history (loop, observe, replay, visual) as one static HTML page, ne
 - `--out`: where to write the page (default .playcal/ui.html)
 - `--last`: only the newest N runs
 - `--open`: open the page in the default browser
+- `--summary`: print counts only (no commands, paths or output) instead of writing the page
 
 ## playcal visual
 
