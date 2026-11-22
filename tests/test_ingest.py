@@ -109,6 +109,14 @@ def test_gameanalytics_attempt_num_wins_over_the_count():
     assert res.accepted[0]["attempt"] == 4
 
 
+def test_gameanalytics_millisecond_ts_read_and_bad_ts_rejects_one_row():
+    from playcal.convert import convert
+    rows = [_ga("u1", 1000000000000, "Start:L1"), _ga("u1", 1e300, "Fail:L1")]
+    res = check_lines(convert([("ga", r) for r in rows], "gameanalytics"))
+    assert [e["ts"] for e in res.accepted] == ["2001-09-09T01:46:40.000Z"]
+    assert len(res.rejected) == 1
+
+
 def test_firebase_level_end_success_maps_to_complete_or_fail_out_of_order():
     from playcal.convert import convert
     rows = [_fb("123.456", 20, "level_end", "L1", success=True), _fb("123.456", 10, "level_end", "L1", success=False),

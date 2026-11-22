@@ -45,7 +45,10 @@ def _gameanalytics(row: dict, game: str | None, version: str | None) -> dict | s
     ts = d.get("client_ts") or row.get("arrival_ts")
     if d.get("user_id") is None or ts is None:
         return "missing data.user_id or a timestamp"
-    ev = {"ts": float(ts), "user": d["user_id"], "session": d.get("session_id") or f"{d['user_id']}/{d.get('session_num')}",
+    ts = float(ts)
+    if ts > 1e11:  # client_ts sent in milliseconds
+        ts /= 1000
+    ev = {"ts": ts, "user": d["user_id"], "session": d.get("session_id") or f"{d['user_id']}/{d.get('session_num')}",
           "game": game or str(row.get("game_id", "unknown")), "game_version": version or "unknown",
           "type": _GA_STATUS[status], "level": ":".join(levels), "attempt": d.get("attempt_num")}
     if d.get("score") is not None:
@@ -98,7 +101,9 @@ def convert(lines: Iterable[tuple[str, str]], fmt: str, game: str | None = None,
         try:
             row = json.loads(line)
             out = parse(row, game, version) if isinstance(row, dict) else "not a JSON object"
-        except (json.JSONDecodeError, TypeError, ValueError) as e:
+            if isinstance(out, dict):
+                _iso(out["ts"])  # a timestamp out of range rejects this row, not the whole run
+        except (json.JSONDecodeError, TypeError, ValueError, OSError, OverflowError) as e:
             out = f"not a {fmt} row: {e}"
         if out == _SKIP:
             continue
