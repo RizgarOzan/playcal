@@ -35,6 +35,11 @@ def image_size(path: Path) -> tuple[int, int] | None:
         head = f.read(32)
         if head[:8] == b"\x89PNG\r\n\x1a\n":
             return struct.unpack(">II", head[16:24])
+        if head[:4] == b"8BPS" and len(head) >= 22:
+            h, w = struct.unpack(">II", head[14:22])
+            return w, h
+        if path.suffix.lower() == ".tga" and len(head) >= 18:
+            return struct.unpack("<HH", head[12:16])
         if head[:2] == b"\xff\xd8":
             f.seek(2)
             while True:
